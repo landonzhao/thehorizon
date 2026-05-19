@@ -1,0 +1,615 @@
+[
+  {
+    "archive_id": "607078d9-c07d-4a93-94a2-8819bd97e277",
+    "source_id": "49c6734b-e18e-49ff-a93b-acc0efef40cc",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Show HN: Secure SDLC Agents for Claude and Cursor (MCP)",
+      "publisher": "Hacker News",
+      "author": "kirumachi",
+      "url": "https://github.com/Kaademos/secure-sdlc-agents",
+      "date_published": "2026-04-07T09:00:01Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Hey HN, I have been using Claude Code and Cursor lately and as we all know, they write code incredibly fast but a few times i have noticed they can introduce the same security flaws. For example, you ask the LLM to build a file upload feature, you will get working code in minutes, but it would almost always miss magic-byte validation or leaves you vulnerable to SVG XSS. The LLM optimizes for code that compiles not code that is secure. To fix this for my own workflow, I made a set of 8 security-focused AI agents (AppSec, GRC, Cloud/Platform, etc) that you can drop into any MCP-compatible tool (Cursor, Windsurf) or use with Claude Code. To clarify, the goal here is not to say that LLM/AI replaces AppSec or the Secure Software Development Cycle, instead the goal is to provide a series of structured prompts and concrete security artifacts (like STRIDE based threat models and ASVS mapped functional requirements) for developers who are already using AI to write code. The aim is to force the LLM to pause and sort of put on a security hat during specific phases of the SDLC. What It Actually Is It is an MIT licenced repo containing the agent prompts, document templates and an MCP server. You can install via Claude marketplace or globally via npm, which gives you a CLI to scaffold git hooks, CodeQL CI Gates and the MCP config. Also included are 3 full walkthroughs in the repo showing how the agents catch things. I am an Application Security Engineer, and I am really curious to get feedback and critique. Please try it out without any signups using the URL. I will be around to answer any questions",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "social_signal",
+      "validity": {
+        "source_id": "49c6734b-e18e-49ff-a93b-acc0efef40cc",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "6a7e797f-967b-44b7-b5ea-1ed22ab31edc",
+    "source_id": "1405fdf1-81c7-48d7-9a3d-827594c14609",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Show HN: FireClaw – Open-source proxy defending AI agents from prompt injection",
+      "publisher": "Hacker News",
+      "author": "raiph_ai",
+      "url": "https://github.com/raiph-ai/fireclaw",
+      "date_published": "2026-03-17T16:28:53Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Hey HN, We built FireClaw because we kept watching AI agents get owned by prompt injection through web content. The agent fetches a page, the page says &quot;ignore previous instructions,&quot; and suddenly your agent is leaking data or running commands it shouldn&#x27;t. The existing solutions detect injection after the fact. We wanted to prevent it. FireClaw is a security proxy that sits between your AI agent and the web. Every fetch passes through a 4-stage pipeline: 1. DNS blocklist check (URLhaus, PhishTank, community feed) 2. Structural sanitization (strip hidden CSS, zero-width Unicode, encoding tricks) 3. Isolated LLM summarization (hardened sub-process with no tools or memory) 4. Output scanning with canary tokens (detect if content bypassed summarization) The key insight: even if Stage 3&#x27;s LLM gets injected, it has no tools, no memory, and no access to your data. It can only return text — which still gets scanned in Stage 4. The attacker hits a dead end. Other design decisions: - No bypass mode. The pipeline is fixed. If your agent gets compromised, it can&#x27;t disable FireClaw. - Community threat feed — instances anonymously share detection metadata (domain, severity, detection count) to build a shared blocklist. No page content is ever sent. - Runs on a Raspberry Pi as a physical appliance with an OLED display that shows real-time stats and lights up with animated flames when it catches a threat. We searched the literature and open source extensively — no one else is doing proxy-based defense for agent prompt injection. Detection exists, sandboxing exists, but an inline proxy that sanitizes before content reaches the agent&#x27;s context? We couldn&#x27;t find it. 200+ detection patterns, JSONL audit logging, domain trust tiers, rate limiting, and cost controls. AGPLv3 licensed. Website: https://fireclaw.app Would love feedback from anyone working on AI agent security. What are we missing? What attack vectors should we add to the pattern database?",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "social_signal",
+      "validity": {
+        "source_id": "1405fdf1-81c7-48d7-9a3d-827594c14609",
+        "source_validity_score": 30,
+        "credibility_label": "do_not_use",
+        "warnings": [
+          "Contains low-trust language"
+        ],
+        "usable": false
+      }
+    }
+  },
+  {
+    "archive_id": "0e079a40-6b39-4ded-a4d7-2f1c7c2a209d",
+    "source_id": "7b18b9e9-4e14-4112-97f0-2752b6d77b36",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Show HN: OpenLegion – AI agent fleet with container isolation and vault proxy",
+      "publisher": "Hacker News",
+      "author": "curiouscake",
+      "url": "https://www.openlegion.ai",
+      "date_published": "2026-03-15T18:41:37Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "I built OpenLegion because every AI agent framework I tried had the same problems in production: API keys sitting in config files inside the agent&#x27;s environment, no way to set hard spend limits, and LLM-as-CEO task routing that&#x27;s non-deterministic and unauditable. The short version of what I built: Security: Every agent runs in its own Docker container or microVM. A vault proxy sits between agents and every LLM call — the agent sends a request, the proxy injects the credential at the network layer, the agent gets back a response. Keys never exist inside the container. Six independent security layers on by default, including per-agent ACL matrices and Unicode sanitization to block invisible-character prompt injection. Cost control: Per-agent daily and monthly budgets with a hard cutoff enforced at the vault proxy. The agent physically cannot make an LLM call that exceeds its budget. Zero markup on LLM usage — you pay your provider directly at their rates. 100+ providers via LiteLLM with configurable failover chains. Orchestration: Deterministic YAML DAG workflows. No LLM deciding what runs next. Four patterns: sequential, parallel, supervisor, hierarchical. Every execution path is predictable and auditable. The rest: Camoufox stealth browser (C++-level anti-detection, CAPTCHA solving), persistent per-agent vector+BM25 memory with temporal decay, MCP tool support, real-time fleet dashboard, Telegram/Discord/Slack/WhatsApp channels, cron + webhook triggering, agents can write and hot-reload their own Python skills at runtime. The engine is ~30,000 lines of Python with 2,100+ tests. Self-hosted runs on one machine — no Redis, no Kubernetes, just Python 3.10+, Docker, and an API key. Three commands to start. For context: the dominant framework in this space is OpenClaw (200K+ stars). CVE-2026-25253 was reported in February — critical RCE, 42,000 exposed instances with no authentication, 341 malicious skills confirmed stealing user data. I&#x27;m not trying to replace it, but that&#x27;s why I think this gap exists. We launched in February 2026. Zero CVEs. BSL 1.1 license — source-available, not open source, and I want to be clear about that. Managed hosting starts at $19/month with a 7-day free trial. Self-hosted is free. Happy to get specific about the security model or architecture — genuinely curious where people think the threat model breaks down. https://openlegion.ai | https://docs.openlegion.ai",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "social_signal",
+      "validity": {
+        "source_id": "7b18b9e9-4e14-4112-97f0-2752b6d77b36",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "854d018a-9e5d-4ede-8f91-577cdbe98a39",
+    "source_id": "0ec3ac9d-dbc7-4a6f-b604-b3a228dc5848",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Show HN: AgentArmor – open-source 8-layer security framework for AI agents",
+      "publisher": "Hacker News",
+      "author": "AgastyaTodi",
+      "url": "https://github.com/Agastya910/agentarmor",
+      "date_published": "2026-03-14T09:44:36Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "I&#x27;ve been talking to founders building AI agents across fintech, devtools, and productivity – and almost none of them have any real security layer. Their agents read emails, call APIs, execute code, and write to databases with essentially no guardrails beyond &quot;we trust the LLM.&quot; So I built AgentArmor: an open-source framework that wraps any agentic architecture with 8 independent security layers, each targeting a distinct attack surface in the agent&#x27;s data flow. The 8 layers: L1 – Ingestion: prompt injection + jailbreak detection (20+ patterns, DAN, extraction attempts, Unicode steganography) L2 – Storage: AES-256-GCM encryption at rest + BLAKE3 integrity for vector DBs L3 – Context: instruction-data separation (like parameterized SQL, but for LLM context), canary tokens, prompt hardening L4 – Planning: action risk scoring (READ=1 → DELETE=7 → EXECUTE=8 → ADMIN=10), chain depth limits, bulk operation detection L5 – Execution: network egress control, per-action rate limiting, human approval gates with conditional rules L6 – Output: PII redaction via Microsoft Presidio + regex fallback L7 – Inter-agent: HMAC-SHA256 mutual auth, trust scoring, delegation depth limits, timestamp-bound replay prevention L8 – Identity: agent-native identity, JIT permissions, short-lived credentials I tested it against all 10 OWASP ASI (Agentic Security Integrity) risks from the December 2025 spec. The red team suite is included in the repo. Works as: (a) a Python library you wrap around tool calls, (b) a FastAPI proxy server for framework-agnostic deployment, or (c) a CLI for scanning prompts in CI. Integrations included for: LangChain, OpenAI Agents SDK, MCP servers. I ran it live with a local Ollama agent (qwen2:7b) – you can watch it block a `database.delete` at L8 (permission check), redact PII from file content at L6, and kill a prompt injection at L1 before it ever reaches the model. GitHub: https://github.com/Agastya910/agentarmor PyPI: pip install agentarmor-core Would love feedback, especially from people who have actually built production agents and hit security issues I haven&#x27;t thought of. TAGS: security, python, llm, ai, agents",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "social_signal",
+      "validity": {
+        "source_id": "0ec3ac9d-dbc7-4a6f-b604-b3a228dc5848",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "d2042d11-a0af-4d7b-b846-5e57462cc142",
+    "source_id": "b2dc4224-fb66-4462-97ca-d1f6997fbe05",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Show HN: Don't share code. Share the prompt",
+      "publisher": "Hacker News",
+      "author": "jacomoRodriguez",
+      "url": "https://openprompthub.com/#",
+      "date_published": "2026-03-10T18:59:27Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Hey HN, I&#x27;m Mario. I recently talked to a colleague about AI, agents and how software development will change in the future. We were wondering why we should even share code anymore when AI agents are already really good at implementing software, just through prompts. Why can&#x27;t everyone get customized software with prompts? &quot;Share the prompt, not the code.&quot; Well, I thought, great idea, let&#x27;s do that. That&#x27;s why I built Open Prompt Hub: https://openprompthub.io . Think GitHub just for prompts. The idea is simple: Users can upload prompts that can then be used by you and your AI tools to generate a script, app, or web service (or prime their agent for a certain task): Just past it into your agent or ide and watch it build for you. If the prompt does not 100% covers your usecase, fork it, tweak it, et voila: tailor-made software ready to use! The prompts are simple markdown files with a frontematter block for meta information. (The spec can be found here: https://openprompthub.io/docs ) They versioned, have information on which AI models build it successfuly and have instructions on how the AI agent can test the resulting software. Users can mention with which models they have successfully or unsuccessfully executed a prompt (builds or fail). This helps in assessing whether a prompt provides reliable output or not. Want to create a open prompt file? Here is the prompt for it which will guide you through: https://openprompthub.io/open-prompt-hub/create-open-prompt Security! Always a topic when dealing with AI and prompts? I&#x27;ve added several security checks that look at every prompt for injections and malicious behavior. Statistical analysis as well as two checks against LLMs for behaviour classification and prompt injection detection. It&#x27;s an MVP for now. But all the mentioned features are already included. If this sounds good, let me know. Try a prompt, fork it, or tell me what you&#x27;d change in the spec or security scanner. I&#x27;m really curious about what would make you trust and reuse prompts. Or if you like the general idea...",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "social_signal",
+      "validity": {
+        "source_id": "b2dc4224-fb66-4462-97ca-d1f6997fbe05",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "f6816fcd-a4f8-4b16-ab97-7df50d303857",
+    "source_id": "911421f3-5293-43db-870e-23cc0959af08",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Show HN: G0 – The control layer for AI agents (scan, test, monitor, comply)",
+      "publisher": "Hacker News",
+      "author": "debug-0101",
+      "url": "https://github.com/guard0-ai/g0",
+      "date_published": "2026-03-10T18:52:44Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "AI agents are shipping fast (LangChain, CrewAI, MCP servers, OpenAI Agents SDK) but there&#x27;s no unified way to secure and govern them. We built g0 to be that control layer. What g0 does across the agent lifecycle: g0 scan - Static + behavioral analysis of agent code. 1,180 rules across 12 security domains, 10 frameworks (LangChain, CrewAI, MCP, OpenAI, Vercel AI, Bedrock, AutoGen, LangChain4j, Spring AI, Go AI), 5 languages. Detects toxic tool chains, taint flows, overprivileged descriptions, missing sandboxing. Integrated threat intelligence checks tool URLs and dependencies against 55+ IOCs and known CVEs. g0 test - Dynamic adversarial red teaming. Fires prompt injections, data exfiltration attempts, tool abuse sequences, jailbreaks, and goal hijacking payloads at your running agents. 3-level progressive judge (deterministic, heuristic, LLM). Works over HTTP and MCP. g0 endpoint - Discovers every AI tool on the machine (Claude Code, Cursor, Windsurf, Zed, 15+ tools), inventories MCP servers, and surfaces misconfigurations. Think nmap but for your AI developer surface. g0 daemon - Continuous runtime monitoring. Behavioral baselines with anomaly detection, cost circuit breaker, correlation engine linking events across sources into attack chains, and a kill switch for when things go sideways. g0 detect - MDM enrollment detection (Jamf, Intune, Mosyle, Kandji, etc.), running AI agent discovery, and host hardening audit in one view. First-class OpenClaw support. g0 is the only security tool that understands OpenClaw&#x27;s architecture: gateway hardening (18 probes), SKILL.md/SOUL.md/MEMORY.md analysis, cognitive drift monitoring via SHA-256 baselines, deployment audits, config hardening, and ClawSec CVE feed integration. If you&#x27;re running OpenClaw in production, g0 catches what generic scanners miss. Compliance built in, not bolted on. Every finding maps to 10 standards: OWASP Agentic Top 10, OWASP LLM Top 10, NIST AI RMF, ISO 42001, EU AI Act, MITRE ATLAS, and more. Generate evidence records, compliance reports, and enforce policies via .g0-policy.yaml with CI gate support. Outputs: Terminal, JSON, SARIF 2.1.0, HTML, CycloneDX AI-BOM, Markdown. Plugs into GitHub Actions, GitLab CI, or any pipeline. One command to start: npx @guard0/g0 scan . GitHub: https://github.com/guard0-ai/g0 We think the AI agent ecosystem needs the same security tooling maturity that web apps got with Burp Suite and Semgrep, but purpose-built for agents. Happy to answer questions about the architecture or threat model.",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "social_signal",
+      "validity": {
+        "source_id": "911421f3-5293-43db-870e-23cc0959af08",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "26f99646-290e-4a61-aede-50c8d2fb4c93",
+    "source_id": "ee9dc67f-4a9d-4191-b741-b8a6dbe0ae31",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Show HN: Open Prompt Hub – share intent, not code",
+      "publisher": "Hacker News",
+      "author": "jacomoRodriguez",
+      "url": "https://openprompthub.io",
+      "date_published": "2026-03-10T14:06:31Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Hey HN, I&#x27;m Mario. I recently talked to a colleague about AI, agents and how software development will change in the future. We were wondering why we should even share code anymore when AI agents are already really good at implementing software, just through prompts. Why can&#x27;t everyone get customized software with prompts? &quot;Share the prompt, not the code.&quot; Well, I thought, great idea, let&#x27;s do that. That&#x27;s why I built Open Prompt Hub: https://openprompthub.io . Think GitHub just for prompts. The idea is simple: Users can upload prompts that can then be used by you and your AI tools to generate a script, app, or web service (or prime their agent for a certain task): Just past it into your agent or ide and watch it build for you. If the prompt does not 100% covers your usecase, fork it, tweak it, et voila: tailor-made software ready to use! The prompts are simple markdown files with a frontematter block for meta information. (The spec can be found here: https://openprompthub.io/docs ) They versioned, have information on which AI models build it successfuly and have instructions on how the AI agent can test the resulting software. Users can mention with which models they have successfully or unsuccessfully executed a prompt (builds or fail). This helps in assessing whether a prompt provides reliable output or not. Want to create a open prompt file? Here is the prompt for it which will guide you through: https://openprompthub.io/open-prompt-hub/create-open-prompt Security! Always a topic when dealing with AI and prompts? I&#x27;ve added several security checks that look at every prompt for injections and malicious behavior. Statistical analysis as well as two checks against LLMs for behaviour classification and prompt injection detection. It&#x27;s an MVP for now. But all the mentioned features are already included. If this sounds good, let me know. Try a prompt, fork it, or tell me what you&#x27;d change in the spec or security scanner. I&#x27;m really curious about what would make you trust and reuse prompts. Or if you like the general idea...",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "social_signal",
+      "validity": {
+        "source_id": "ee9dc67f-4a9d-4191-b741-b8a6dbe0ae31",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "0650b105-6489-491e-8821-44805dc053b8",
+    "source_id": "36ca4194-b96e-4e00-a886-24c6e1f112f8",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Show HN: The Mog Programming Language",
+      "publisher": "Hacker News",
+      "author": "belisarius222",
+      "url": "https://moglang.org",
+      "date_published": "2026-03-09T17:57:00Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Hi, Ted here, creator of Mog. - Mog is a statically typed, compiled, embedded language (think statically typed Lua) designed to be written by LLMs -- the full spec fits in 3,200 tokens. - An AI agent writes a Mog program, compiles it, and dynamically loads it as a plugin, script, or hook. - The host controls exactly which functions a Mog program can call (capability-based permissions), so permissions propagate from agent to agent-written code. - Compiled to native code for low-latency plugin execution -- no interpreter overhead, no JIT, no process startup cost. - The compiler is written in safe Rust so the entire toolchain can be audited for security. Even without a full security audit, Mog is already useful for agents extending themselves with their own code. - MIT licensed, contributions welcome. Motivations for Mog: 1. Syntax Only an AI Could Love: Mog is written for AIs to write, so the spec fits easily in context (~3200 tokens), and it&#x27;s intended to minimize foot-guns to lower the error rate when generating Mog code. This is why Mog has no operator precedence: non-associative operations have to use parentheses, e.g. (a + b) * c. It&#x27;s also why there&#x27;s no implicit type coercion, which I&#x27;ve found over the decades to be an annoying source of runtime bugs. There&#x27;s also less support in Mog for generics, and there&#x27;s absolutely no support for metaprogramming, macros, or syntactic abstraction. When asking people to write code in a language, these restrictions could be onerous. But LLMs don&#x27;t care, and the less expressivity you trust them with, the better. 2. Capabilities-Based Permissionsl: There&#x27;s a paradox with existing security models for AI agents. If you give an agent like OpenClaw unfettered access to your data, that&#x27;s insecure and you&#x27;ll get pwned. But if you sandbox it, it can&#x27;t do most of what you want. Worse, if you run scripts the agent wrote, those scripts don&#x27;t inherit the permissions that constrain the agent&#x27;s own bash tool calls, which leads to pwnage and other chaos. And that&#x27;s not even assuming you run one of the many OpenClaw plugins with malware. Mog tries to solve this by taking inspiration from embedded languages. It compiles all the way to machine code, ahead of time, but the compiler doesn&#x27;t output any dangerous code (at least it shouldn&#x27;t -- Mog is quite new, so that could still be buggy). This allows a host program, such as an AI agent, to generate Mog source code, compile it, and load it into itself using dlopen(), while maintaining security guarantees. The main trick is that a Mog program on its own can&#x27;t do much. It has no direct access to syscalls, libc, or memory. It can basically call functions, do heap allocations (but only within the arena the host gives it), and return something. If the host wants the Mog program to be able to do I/O, it has to supply the functions that the Mog program will call. A core invariant is that a Mog program should never be able to crash the host program, corrupt its state, or consume more resources than the host allows. This allows the host to inspect the arguments to any potentially dangerous operation that the Mog program attempts, since it&#x27;s code that runs in the host. For example, a host agent could give a Mog program a function to run a bash command, then enforce its own session-level permissions on that command, even though the command was dynamically generated by a plugin that was written without prior knowledge of those permission settings. (There are a couple other tricks that PL people might find interesting. One is that the host can limit the execution time of the guest program. It does this using cooperative interrupt polling, i.e. the compiler inserts runtime checks that check if the host has asked the guest to stop. This causes a roughly 10% drop in performance on extremely tight loops, which are the worst case. It could almost certainly be optimized.) 3. Self Modification Without Restart: When I try to modify my OpenClaw from my phone, I have to restart the whole agent. Mog fixes this: an agent can compile and run new plugins without interrupting a session, which makes it dynamically responsive to user feedback (e.g., you tell it to always ask you before deleting a file and without any interruption it compiles and loads the code to... actually do that). Async support is built into the language, by adapting LLVM&#x27;s coroutine lowering to our Rust port of the QBE compiler, which is what Mog uses for compilation. The Mog host library can be slotted into an async event loop (tested with Bun), so Mog async calls get scheduled seamlessly by the agent&#x27;s event loop. Another trick is that the Mog program uses a stack inside the memory arena that the host provides for it to run in, rather than the system stack. The system tracks a guard page between the stack and heap. This design prevents stack overflow without runtime overhead. Lots of work still needs to be done to make Mog a &quot;batteries-included&quot; experience like Python. Most of that work involves fleshing out a standard library to include things like JSON, CSV, Sqlite, and HTTP. One high-impact addition would be an `llm` library that allows the guest to make LLM calls through the agent, which should support multiple models and token budgeting, so the host could prevent the plugin from burning too many tokens. I suspect we&#x27;ll also want to do more work to make the program lifecycle operations more ergonomic. And finally, there should be a more fully featured library for integrating a Mog host into an AI agent like OpenClaw or OpenAI&#x27;s Codex CLI.",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "social_signal",
+      "validity": {
+        "source_id": "36ca4194-b96e-4e00-a886-24c6e1f112f8",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "b817227b-888e-4bf9-b921-4a7cc34fa61f",
+    "source_id": "4733a97c-b8f6-4290-b4f1-2d276a651558",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "CVE-2026-5163: Mattermost versions 11.5.x <= 11.5.1 fail to verify channel membership when processing AI-assisted message rewrites whic",
+      "publisher": "NVD",
+      "author": "NIST",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-5163",
+      "date_published": "2026-05-18T09:16:23.273",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Mattermost versions 11.5.x <= 11.5.1 fail to verify channel membership when processing AI-assisted message rewrites which allows an authenticated attacker to read the content of threads in private channels and direct messages they do not have access to via a crafted request to the post rewrite endpoint.. Mattermost Advisory ID: MMSA-2026-00645",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "cve_nvd",
+      "validity": {
+        "source_id": "4733a97c-b8f6-4290-b4f1-2d276a651558",
+        "source_validity_score": 75,
+        "credibility_label": "medium_trust",
+        "warnings": [],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "500acdd7-9e68-41dd-8905-45df6494d413",
+    "source_id": "b4bc060e-d372-4c4a-a446-b522007f89d3",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "CVE-2023-24215: Incorrect access control in the /uci/get/ endpoint of NOVUS AirGate 4G firmware v1.1.16 allows unauthenticated attackers",
+      "publisher": "NVD",
+      "author": "NIST",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2023-24215",
+      "date_published": "2026-05-18T18:17:20.053",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Incorrect access control in the /uci/get/ endpoint of NOVUS AirGate 4G firmware v1.1.16 allows unauthenticated attackers to obtain administrator credentials via a crafted POST request.",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "cve_nvd",
+      "validity": {
+        "source_id": "b4bc060e-d372-4c4a-a446-b522007f89d3",
+        "source_validity_score": 75,
+        "credibility_label": "medium_trust",
+        "warnings": [],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "1b8e2190-367f-45de-a9c6-e055397422fb",
+    "source_id": "8c92a2ca-30e1-46cf-95b3-99abeeddb4e9",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "CVE-2026-32244: Discourse is an open-source discussion platform. In versions prior to 2026.1.4, 2026.3.1, 2026.4.1 and 2026.5.0-latest.1",
+      "publisher": "NVD",
+      "author": "NIST",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-32244",
+      "date_published": "2026-05-19T00:16:37.100",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Discourse is an open-source discussion platform. In versions prior to 2026.1.4, 2026.3.1, 2026.4.1 and 2026.5.0-latest.1, outdated cached AI summaries can leak removed content to anonymous and unprivileged users who cannot regenerate summaries. This issue has been fixed in versions 2026.1.4, 2026.3.1, 2026.4.1 and 2026.5.0-latest.1. To work around this issue, restrict summary generation by tightening the allowed groups on the summarization Personas.",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "cve_nvd",
+      "validity": {
+        "source_id": "8c92a2ca-30e1-46cf-95b3-99abeeddb4e9",
+        "source_validity_score": 55,
+        "credibility_label": "low_trust",
+        "warnings": [
+          "Contains low-trust language"
+        ],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "2c5766e5-146f-40e8-83ac-7d5565e35c58",
+    "source_id": "817f96ca-6cfb-49c4-b499-49c11e24b990",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Prompt2Fingerprint: Plug-and-Play LLM Fingerprinting via Text-to-Weight Generation",
+      "publisher": "arXiv",
+      "author": "",
+      "url": "http://arxiv.org/abs/2605.18474v1",
+      "date_published": "2026-05-18T14:30:32Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "The widespread deployment and redistribution of large language models (LLMs) have made model provenance tracking a critical challenge. While existing LLM fingerprinting methods, particularly active approaches that embed identity signals via fine-tuning, achieve high accuracy and robustness, they suffer from significant scalability bottlenecks. These methods typically treat fingerprint injection as an independent, one-off optimization task rather than a reusable capability, necessitating separate, resource-intensive training for every new identity. This incurs prohibitive computational costs and deployment delays. To address this, we propose Prompt2Fingerprint (P2F), the first framework that reformulates fingerprinting as a conditional parameter generation task. By leveraging a specialized generator, P2F maps textual descriptions directly to low-rank parameter increments in a single forward pass, enabling plug-and-play LLM fingerprint injection without further model retraining. Our experiments demonstrate that P2F maintains high fingerprint accuracy, harmlessness, and robustness while significantly reducing computational overhead, offering a scalable and instant solution for LLM ownership management.",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "arxiv",
+      "validity": {
+        "source_id": "817f96ca-6cfb-49c4-b499-49c11e24b990",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [
+          "Missing or unsafe URL"
+        ],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "336c441a-5bb1-47a3-9e18-8680e9f25ff7",
+    "source_id": "f152fdbd-20a7-4caf-a9e6-479ec655dbf8",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Prompts Don't Protect: Architectural Enforcement via MCP Proxy for LLM Tool Access Control",
+      "publisher": "arXiv",
+      "author": "",
+      "url": "http://arxiv.org/abs/2605.18414v1",
+      "date_published": "2026-05-18T13:52:24Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Large language models increasingly operate as autonomous agents that select and invoke tools from large registries. We identify a critical gap: when unauthorized tools are visible in an agent's context, models select them in adversarial scenarios -- even when explicitly instructed otherwise. We propose a governed MCP proxy that enforces attribute-based access control (ABAC) at two points: tool discovery, where unauthorized tools are removed from the model's context window, and tool invocation, where a second check blocks any unauthorized call. Across three models (Qwen 2.5 7B, Llama 3.1 8B, Claude Haiku 3.5) and 150 adversarial tasks spanning four attack categories, our proxy reduces unauthorized invocation rate (UIR) to 0% while adding under 50ms median latency. Prompt-based restrictions reduce UIR by only 11--18 percentage points, leaving substantial residual risk. Our results show that architectural enforcement -- not prompting -- is necessary for reliable tool access control in deployed agentic systems.",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "arxiv",
+      "validity": {
+        "source_id": "f152fdbd-20a7-4caf-a9e6-479ec655dbf8",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [
+          "Missing or unsafe URL"
+        ],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "4ed54a55-258a-4766-8c60-024451013533",
+    "source_id": "9f5a208b-cf04-4086-ba24-2d948b7c0c63",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Safety Geometry Collapse in Multimodal LLMs and Adaptive Drift Correction",
+      "publisher": "arXiv",
+      "author": "",
+      "url": "http://arxiv.org/abs/2605.18104v1",
+      "date_published": "2026-05-18T09:16:55Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Multimodal large language models (MLLMs) often fail to transfer safety capabilities learned in the text modality to semantically equivalent non-text inputs, revealing a persistent multimodal safety gap. We study this gap from a representation-geometric perspective by analyzing a text-aligned refusal direction and a modality-induced drift direction. We show that multimodal inputs compress the usable separation along the refusal direction, making it no longer reliable for identifying and refusing harmful inputs. We refer to this failure mode as Safety Geometry Collapse. We quantify it through conditional refusal separability and show that stronger modality-induced drift is consistently associated with weaker refusal separability and higher attack success rates. We then validate the causal role of modality-induced drift through a fixed-strength activation intervention: counteracting the estimated drift restores refusal separability and improves multimodal safety. After drift correction, we further observe self-rectification, where the model recovers its ability to recognize and refuse harmful multimodal inputs during forward dynamics. This effect also provides an internal signal of the model's perceived harmfulness of each input. Motivated by this signal, we propose ReGap, a training-free inference-time method that adaptively corrects modality drift using self-rectification. Experiments across multiple multimodal safety benchmarks and utility benchmarks demonstrate the effectiveness of ReGap, which significantly improves the safety of MLLMs without compromising general capabilities. Our findings highlight representation-level modality alignment as a crucial direction for real-time safety improvement and for building safer, more reliable MLLMs.",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "arxiv",
+      "validity": {
+        "source_id": "9f5a208b-cf04-4086-ba24-2d948b7c0c63",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [
+          "Missing or unsafe URL"
+        ],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "433d55e4-cb44-47f5-ac87-43c265e982e9",
+    "source_id": "b0c62701-ff94-4827-9269-ba0e0e68a214",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Babel: Jailbreaking Safety Attention via Obfuscation Distribution Optimized Sampling",
+      "publisher": "arXiv",
+      "author": "",
+      "url": "http://arxiv.org/abs/2605.17971v1",
+      "date_published": "2026-05-18T07:27:59Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Despite rigorous safety alignment, Large Language Models (LLMs) remain vulnerable to jailbreak attacks. Existing black-box methods often rely on heuristic templates or exhaustive trials, lacking mechanistic interpretability and query efficiency. In this study, we investigate an intrinsic vulnerability in the safety mechanisms of LLMs, where safety alignment relies on a small set of sparsely distributed attention heads, leaving much of the representational space weakly monitored. We formalize this phenomenon with a mathematical jailbreaking model that characterizes the delicate boundary of effective text obfuscation and analytically explains observed jailbreak behaviors. Guided by this model, we propose Babel, an efficient black-box attack framework that exploits the identified safety gap through systematic obfuscation sampling with iterative, feedback-driven distribution refinement, enabling reliable and high-success jailbreak attacks without access to model internals. Comprehensive evaluations on frontier commercial models demonstrate that Babel achieves state-of-the-art attack success rates and superior query efficiency. Specifically, compared to state-of-the-art methods, Babel increases the attack success rate on GPT-4o from 41.33% to 82.67% and on Claude-3-5-haiku from 38.33% to 78.33% within an average of 40 queries, providing a robust red-teaming methodology for LLMs safety research.",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "arxiv",
+      "validity": {
+        "source_id": "b0c62701-ff94-4827-9269-ba0e0e68a214",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [
+          "Missing or unsafe URL"
+        ],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "132d383e-bd8f-484c-8c9b-22c79e8b7619",
+    "source_id": "da6a7fc6-9bcc-4993-bae0-3186d1288b4c",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Speed Kills: Exploring Confused Deputy Attacks Through Edge AI Accelerators",
+      "publisher": "arXiv",
+      "author": "",
+      "url": "http://arxiv.org/abs/2605.17707v1",
+      "date_published": "2026-05-18T00:04:51Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "AI Accelerator (AIA) are specialized hardware e.g., Tensor Processing Unit (TPU), that enable optimal and efficient execution of AI applications and on-device inference. The growing demand for AI applications has led to the widespread adoption of AIAs on Edge or embedded devices on Edge or embedded devices. Unlike applications, AIAs are not bound by Operating System (OS) restrictions and have limited visibility into Application Processor (AP) security mechanisms (e.g., kernel vs. application memory, process isolation). This semantic gap can lead to confused deputy vulnerabilities, i.e., AIA can be tricked by a malicious application to perform privileged operations on their behalf. In this paper, we conducted the first in-depth study of Confused Deputy Attacks (CDAs) using AIA. We design DeputyHunt, a Large Language Model (LLM) assisted framework to extract CDA relevant information for a given AIA through a combination of dynamic and static analysis. We used this information to explore the feasibility of CDA on seven different AIAs from popular vendors, i.e., Google, NVIDIA, Hailo, Texas Instruments, NXP, AWS, and Rockchip. Our analysis revealed that CDA is feasible on six out of the seven AIAs, impacting over 128 System On Chips (SOCs) and over 100 million devices. Our findings highlight critical security risks posed by AIA on system security. Our work has been acknowledged by the corresponding vendors and assigned the CVE-2025-66425. We propose an on-demand validation defense against CDA, and evaluation on the Gem5- salam simulator shows that it incurs minimal runtime overhead (i.e., ~15%).",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "arxiv",
+      "validity": {
+        "source_id": "da6a7fc6-9bcc-4993-bae0-3186d1288b4c",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [
+          "Missing or unsafe URL"
+        ],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "2cba1edf-f4ab-44b7-8e06-c95c30ad23ac",
+    "source_id": "779731dd-be3e-4103-8c73-5148af3c87b4",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "ContraFix: Agentic Vulnerability Repair via Differential Runtime Evidence and Skill Reuse",
+      "publisher": "arXiv",
+      "author": "",
+      "url": "http://arxiv.org/abs/2605.17450v1",
+      "date_published": "2026-05-17T13:48:25Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Large language model (LLM) agents are increasingly used for automated vulnerability repair (AVR), where repository-level reasoning enables them to inspect context and produce source-code patches. However, recent empirical results show that these agents still struggle with real-world vulnerabilities. Their main failure mode is semantic misunderstanding: choosing a repair direction that does not match the root cause. We identify two reasons for this gap. Existing agents usually reason from the failing execution alone. A crash report can pinpoint where the program failed, but it does not reveal which variable or state transition, among many candidates near the fault site, separates the crashing behavior from safe execution. As a result, agents often produce symptom-oriented patches instead of causal fixes. Moreover, evidence collected for one vulnerability is rarely retained, so similar cases in later repositories must be diagnosed again from scratch. We present ContraFix, an agentic AVR framework that couples differential runtime evidence with reusable repair skills. Its Mutator constructs PoC variants that straddle the failure boundary; its Analyzer inserts state probes around the fault region and summarizes divergences between crashing and non-crashing executions into a repair specification; and its Patcher converts the specification into verified source patches. Each successful repair updates a two-track skill base containing repair specifications and mutation strategies, which are retrieved through a three-tier policy for future instances. On SEC-Bench (C/C++, 200 instances) and PatchEval (Go, Python, JavaScript, 225 instances), ContraFix with GPT-5-mini resolves 84.0% and 73.8% of the tasks, respectively, achieving state-of-the-art performance on both benchmarks while costing less than one-third of the strongest comparable baseline.",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "arxiv",
+      "validity": {
+        "source_id": "779731dd-be3e-4103-8c73-5148af3c87b4",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [
+          "Missing or unsafe URL"
+        ],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "acb934d3-0bd1-4265-80f8-e132c0bd3a55",
+    "source_id": "3ad3e954-ef74-4c8d-a087-9aae47d523c6",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "DP-SelFT: Differentially Private Selective Fine-Tuning for Large Language Models",
+      "publisher": "arXiv",
+      "author": "",
+      "url": "http://arxiv.org/abs/2605.17432v1",
+      "date_published": "2026-05-17T12:55:11Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Large language models (LLMs) are commonly adapted to downstream tasks through fine-tuning, but fine-tuning data often contains sensitive information that may be leaked by the resulting model. Differential privacy (DP) offers formal protection against such leakage, yet DP fine-tuning of LLMs still suffers from substantial utility degradation due to gradient clipping and noise injection. Existing work improves this trade-off by combining DP with parameter-efficient fine-tuning methods such as LoRA, which constrain the form of updates. In this work, we study a complementary direction: selective fine-tuning, which constrains where updates are applied. We propose DP-SelFT, a framework for differentially private selective fine-tuning of LLMs. DP-SelFT addresses three DP-specific challenges in parameter selection: avoiding repeated privacy cost, improving stability under noisy estimates, and selecting parameters that remain useful under clipped and noisy updates. It first constructs a lightweight DP synthetic dataset and performs selection only on this synthetic data, so the selection stage incurs no additional privacy cost. It then conducts layer-level selection by temporarily training candidate layer subsets on a synthetic training split and evaluating them on a synthetic validation split. Crucially, this temporary training is performed under a perturbation regime matched to downstream DP fine-tuning, with worst-case perturbations of the same scale as DP noise. This favors layer subsets that are not only learnable but also robust to noisy private updates. Experiments on benchmark tasks show that DP-SelFT consistently improves the privacy--utility trade-off over existing DP fine-tuning baselines under the same privacy guarantees.",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "arxiv",
+      "validity": {
+        "source_id": "3ad3e954-ef74-4c8d-a087-9aae47d523c6",
+        "source_validity_score": 30,
+        "credibility_label": "do_not_use",
+        "warnings": [
+          "Missing or unsafe URL",
+          "Contains low-trust language"
+        ],
+        "usable": false
+      }
+    }
+  },
+  {
+    "archive_id": "de07f6b0-fd3f-4af7-8a54-fcdd248878a2",
+    "source_id": "6f6c3541-db8e-4f41-ac79-3d584c52de75",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "ADR: An Agentic Detection System for Enterprise Agentic AI Security",
+      "publisher": "arXiv",
+      "author": "",
+      "url": "http://arxiv.org/abs/2605.17380v1",
+      "date_published": "2026-05-17T10:49:07Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "We present the Agentic AI Detection and Response (ADR) system, the first large-scale, production-proven enterprise framework for securing AI agents operating through the Model Context Protocol (MCP). We identify three persistent challenges in this domain: (1) limited observability -- existing Endpoint Detection and Response (EDR) tools see file writes but not the agent reasoning, prompts, or causal chains linking intent to execution; (2) insufficient robustness -- static defenses constrained by pre-defined rules fail to generalize across diverse attack techniques and enterprise contexts; and (3) high detection costs -- LLM-based inference is prohibitively expensive at scale. ADR addresses these challenges via three components: the ADR Sensor for high-fidelity agentic telemetry, the ADR Explorer for systematic pre-deployment red teaming and hard-example generation, and the ADR Detector for scalable, two-tier online detection combining fast triage with context-aware reasoning. Deployed at Uber for over ten months, ADR has sustained reliable detection in production with growing adoption reaching over 7,200 unique hosts and processing over 10,000 agent sessions daily, uncovering hundreds of credential exposures across 26 categories and enabling a shift-left prevention layer (97.2% precision, 206 detected credentials). To validate the approach and enable community adoption, we introduce ADR-Bench (302 tasks, 17 techniques, 133 MCP servers), where ADR achieves zero false positives while detecting 67% of attacks -- outperforming three state-of-the-art baselines (ALRPHFS, GuardAgent, LlamaFirewall) by 2--4x in F1-score. On AgentDojo (public prompt injection benchmark), ADR detects all attacks with only three false alarms out of 93 tasks.",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "arxiv",
+      "validity": {
+        "source_id": "6f6c3541-db8e-4f41-ac79-3d584c52de75",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [
+          "Missing or unsafe URL"
+        ],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "21494e0e-543b-4d07-b84e-57ba98f07cca",
+    "source_id": "de9dd967-ae4b-4157-afab-ca4e98a3924d",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "When Efficiency Backfires: Cascading LLMs Trigger Cascade Failure under Adversarial Attack",
+      "publisher": "arXiv",
+      "author": "",
+      "url": "http://arxiv.org/abs/2605.17288v1",
+      "date_published": "2026-05-17T06:59:43Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Large Language Model (LLM) cascade systems are designed to balance efficiency and performance by processing queries with lightweight models while selectively escalating complex cases to more powerful ones. Such systems seek to reduces computational cost and latency while maintaining task performance, making it an appealing choice for large-scale deployment. However, the cascade design introduces new vulnerabilities through an expanded attack surface: the inclusion of lightweight front-end models and internal decision mechanisms introduces new weaknesses. In this work, we present the first study demonstrating that LLM cascade systems are susceptible to targeted adversarial manipulation, which disrupts both performance objectives and the intended cost advantages of the cascade design. We propose a novel attack framework that employs constrained sequential collaborative optimization of adversarial suffix under cascade dependencies, enabling simultaneous exploitation of lightweight models and decision mechanisms. This framework adapts to adversaries with varying capabilities, inducing controllable degradation in both cost-efficiency and accuracy. Unlike prior attacks targeting standalone models, our approach strategically leverages the cascade structure to achieve significantly stronger impact. Extensive experiments across diverse datasets and representative LLM cascade systems validate the practicality and severity of this attack. Our findings highlight the urgent need to rigorously scrutinize the security of LLM cascade systems and call for broader attention to the systemic risks inherent in such designs.",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "arxiv",
+      "validity": {
+        "source_id": "de9dd967-ae4b-4157-afab-ca4e98a3924d",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [
+          "Missing or unsafe URL"
+        ],
+        "usable": true
+      }
+    }
+  },
+  {
+    "archive_id": "8187d84d-9be1-4a70-90ce-d5388cffdd62",
+    "source_id": "6cae67ef-3872-41cb-a47e-7d066a6328d3",
+    "archived_at": "2026-05-19T03:17:30.694Z",
+    "citation": {
+      "title": "Triple-Hoisted Baby-Step Giant-Step Linear Transformation over CKKS Homomorphic Encryption and Hardware Accelerator",
+      "publisher": "arXiv",
+      "author": "",
+      "url": "http://arxiv.org/abs/2605.17222v1",
+      "date_published": "2026-05-17T01:57:35Z",
+      "date_accessed": "2026-05-19T03:17:30.694Z"
+    },
+    "content": {
+      "raw_html": "",
+      "full_text": "Computations can be directly carried out over ciphertexts using homomorphic encryption (HE), which is indispensable for privacy-preserving cloud computing. Linear transformation is widely used in neural networks, including large language models. However, the implementation of linear transformation over HE requires a large number of ciphertext rotations, which incur significant memory and hardware overhead despite existing simplification techniques. This paper proposes a triple-hoisted baby-step giant-step algorithm that decomposes the baby step further to substantially reduce the number of ciphertext rotations needed for the CKKS HE evaluation of linear transformation. Moreover, to reduce off-chip memory access, which contributes to the majority of the latency, a memory-optimized data path is proposed by partitioning the algorithm into multiple phases. Furthermore, an efficient FPGA-based hardware accelerator with an optimized permutation circuit for message routing is designed for the proposed scheme. For a set of typical parameters, the proposed design reduces the off-chip memory access by 2.9x compared to the best prior design. Synthesized for Xilinx Virtex UltraScale+ devices, the proposed design achieves a 5.8x reduction in computational latency compared with the baseline design.",
+      "attachments": []
+    },
+    "metadata": {
+      "source_type": "arxiv",
+      "validity": {
+        "source_id": "6cae67ef-3872-41cb-a47e-7d066a6328d3",
+        "source_validity_score": 50,
+        "credibility_label": "low_trust",
+        "warnings": [
+          "Missing or unsafe URL"
+        ],
+        "usable": true
+      }
+    }
+  }
+]

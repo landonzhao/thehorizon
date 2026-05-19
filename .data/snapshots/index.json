@@ -1,0 +1,14 @@
+[
+  {
+    "snapshot_id": "snapshot-2026-05-18",
+    "file_name": "snapshot-2026-05-18.json",
+    "period": "daily",
+    "generated_at": "2026-05-19T05:42:46.438Z",
+    "start_utc": "2026-05-17T14:00:00.000Z",
+    "end_utc": "2026-05-18T14:00:00.000Z",
+    "start_local": "2026-05-17T22:00:00.000Z",
+    "end_local": "2026-05-18T22:00:00.000Z",
+    "count": 24,
+    "discarded_count": 0
+  }
+]
