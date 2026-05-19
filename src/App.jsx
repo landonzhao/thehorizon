@@ -1,16 +1,33 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import "./style.css";
 
 function formatLabel(value = "") {
-  return value.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return String(value || "unknown")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function formatDate(value) {
   if (!value) return "No date";
-  return new Date(value).toLocaleString();
+
+  return new Intl.DateTimeFormat("en-SG", {
+    timeZone: "Asia/Singapore",
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
+}
+
+function getCredibilityLabel(source) {
+  return source.validity?.credibility_label || source.credibility_label || "unknown";
 }
 
 function SourceCard({ source }) {
+  const credibility = getCredibilityLabel(source);
+
   return (
     <article className="source-card">
       <div className="source-card-header">
@@ -18,22 +35,30 @@ function SourceCard({ source }) {
           <p className="eyebrow">{formatLabel(source.source_type)}</p>
           <h2>{source.title}</h2>
         </div>
-        <span className={`badge ${source.validity?.credibility_label || "medium_trust"}`}>
-          {formatLabel(source.validity?.credibility_label || "Unknown")}
+
+        <span className={`badge ${credibility}`}>
+          {formatLabel(credibility)}
         </span>
       </div>
 
       <p className="meta">
-        {source.publisher || "Unknown publisher"} · {formatDate(source.date_published)}
+        {source.publisher || "Unknown publisher"} · Published:{" "}
+        {formatDate(source.date_published)}
       </p>
 
-      <p className="summary">{source.full_text?.slice(0, 360) || "No text extracted."}</p>
+      <p className="summary">
+        {source.full_text?.slice(0, 360) ||
+          source.summary?.slice(0, 360) ||
+          "No text extracted."}
+      </p>
 
-      <div className="tag-row">
-        {(source.tags || []).map((tag) => (
-          <span key={tag}>{formatLabel(tag)}</span>
-        ))}
-      </div>
+      {source.tags?.length > 0 && (
+        <div className="tag-row">
+          {source.tags.map((tag) => (
+            <span key={tag}>{formatLabel(tag)}</span>
+          ))}
+        </div>
+      )}
 
       <a href={source.url} target="_blank" rel="noreferrer">
         Open source →
@@ -48,6 +73,7 @@ function Nav({ page, setPage }) {
   return (
     <nav className="top-nav">
       <strong>The Horizon</strong>
+
       <div>
         {pages.map((item) => (
           <button
@@ -63,55 +89,77 @@ function Nav({ page, setPage }) {
   );
 }
 
-function DailyPage({ snapshot }) {
-  const sources = snapshot?.sources || [];
+function SourcePage({ period }) {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    const endpoint =
+      period === "daily"
+        ? "/api/sources"
+        : `/api/period-sources?period=${period}`;
+
+    fetch(endpoint)
+      .then((res) => res.json())
+      .then(setData)
+      .catch(console.error);
+  }, [period]);
+
+  if (!data) {
+    return <section className="panel">Loading {period} sources...</section>;
+  }
+
+  const sources = data.sources || [];
 
   return (
     <>
       <header className="hero">
-        <p className="eyebrow">Daily Intake</p>
-        <h1>Previous-Day AI Threat Sources</h1>
+        <p className="eyebrow">{formatLabel(period)} Intake</p>
+        <h1>{formatLabel(period)} AI Threat Sources</h1>
         <p>
-          Cleaned, deduplicated, validity-checked source intake for the previous
-          Singapore 6am–6am reporting window.
+          Articles, reports, advisories, and research items filtered by
+          publication date, not access date.
         </p>
       </header>
 
       <section className="metrics-grid">
         <div className="metric-card">
-          <p>Accepted sources</p>
-          <strong>{snapshot?.count || 0}</strong>
+          <p>Sources</p>
+          <strong>{data.count || sources.length}</strong>
         </div>
+
         <div className="metric-card">
           <p>Rejected</p>
-          <strong>{snapshot?.rejected_count || 0}</strong>
+          <strong>{data.rejected_count || 0}</strong>
         </div>
+
         <div className="metric-card">
           <p>Discarded</p>
-          <strong>{snapshot?.discarded_count || 0}</strong>
+          <strong>{data.discarded_count || 0}</strong>
         </div>
+
         <div className="metric-card">
           <p>Generated</p>
-          <strong>{formatDate(snapshot?.generated_at)}</strong>
+          <strong>{formatDate(data.generated_at)}</strong>
         </div>
       </section>
 
-      {snapshot?.reporting_window && (
-        <section className="panel">
-          <h2>Reporting Window</h2>
-          <p>
-            {formatDate(snapshot.reporting_window.start_utc)} →{" "}
-            {formatDate(snapshot.reporting_window.end_utc)}
-          </p>
-          <p>{snapshot.reporting_window.timezone}</p>
-        </section>
-      )}
+      {(data.reporting_window || data.start) && (
+          <section className="panel">
+            <h2>Publication Window</h2>
+            <p>
+              {formatDate(data.reporting_window?.start_utc || data.start)} SGT →{" "}
+              {formatDate(data.reporting_window?.end_utc || data.end)} SGT
+            </p>
+            <p>Filtered using source publish date.</p>
+          </section>
+        )}
 
-      {snapshot?.connector_results && (
+      {data.connector_results && (
         <section className="panel">
           <h2>Connector Status</h2>
+
           <div className="connector-grid">
-            {snapshot.connector_results.map((connector) => (
+            {data.connector_results.map((connector) => (
               <div className="connector-card" key={connector.connector}>
                 <strong>{connector.connector}</strong>
                 <span>{connector.status}</span>
@@ -124,67 +172,25 @@ function DailyPage({ snapshot }) {
       )}
 
       <section className="section-header">
-        <h2>Chosen Articles / Reports / Advisories</h2>
+        <h2>{formatLabel(period)} Articles / Reports / Advisories</h2>
         <p>These are source items only. Classification and analysis come next.</p>
       </section>
 
-      <section className="source-grid">
-        {sources.map((source) => (
-          <SourceCard key={source.id} source={source} />
-        ))}
-      </section>
-    </>
-  );
-}
-
-function PeriodPage({ period, snapshots }) {
-  const visibleSnapshots = useMemo(() => {
-    const limits = {
-      weekly: 7,
-      monthly: 31,
-      quarterly: 92,
-    };
-
-    const cutoff = new Date(Date.now() - limits[period] * 24 * 60 * 60 * 1000);
-
-    return snapshots.filter((item) => new Date(item.end_utc) >= cutoff);
-  }, [period, snapshots]);
-
-  const total = visibleSnapshots.reduce((sum, item) => sum + (item.count || 0), 0);
-
-  return (
-    <>
-      <header className="hero">
-        <p className="eyebrow">{formatLabel(period)} Intake</p>
-        <h1>{formatLabel(period)} Source Overview</h1>
-        <p>
-          Aggregated stored snapshots. Later this page will show trend analysis,
-          category movement, and critical takeaways.
-        </p>
-      </header>
-
-      <section className="metrics-grid">
-        <div className="metric-card">
-          <p>Snapshots</p>
-          <strong>{visibleSnapshots.length}</strong>
-        </div>
-        <div className="metric-card">
-          <p>Total sources</p>
-          <strong>{total}</strong>
-        </div>
-      </section>
-
-      <section className="panel">
-        <h2>Stored Snapshots</h2>
-        <div className="snapshot-list">
-          {visibleSnapshots.map((item) => (
-            <div className="snapshot-pill" key={item.snapshot_id}>
-              <strong>{item.snapshot_id}</strong>
-              <span>{item.count} sources</span>
-            </div>
+      {sources.length === 0 ? (
+        <section className="panel">
+          <h2>No sources found</h2>
+          <p>
+            No source records matched this period. Check whether the database has
+            sources with valid publication dates.
+          </p>
+        </section>
+      ) : (
+        <section className="source-grid">
+          {sources.map((source) => (
+            <SourceCard key={source.id} source={source} />
           ))}
-        </div>
-      </section>
+        </section>
+      )}
     </>
   );
 }
@@ -200,7 +206,33 @@ function ArchivePage() {
   });
 
   function updateFilter(key, value) {
-    setFilters((current) => ({ ...current, [key]: value }));
+    setFilters((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function setPreset(days) {
+    const end = new Date();
+    const start = new Date();
+
+    start.setDate(end.getDate() - days);
+
+    setFilters((current) => ({
+      ...current,
+      start: start.toISOString().slice(0, 10),
+      end: end.toISOString().slice(0, 10),
+    }));
+  }
+
+  function clearFilters() {
+    setFilters({
+      start: "",
+      end: "",
+      publisher: "",
+      source_type: "",
+      tag: "",
+    });
   }
 
   function loadArchive() {
@@ -226,17 +258,24 @@ function ArchivePage() {
         <p className="eyebrow">Archive</p>
         <h1>Stored Source Archive</h1>
         <p>
-          Search previous source snapshots by source timeframe, publisher, type,
+          Search archived sources by publication date, publisher, source type,
           and tag.
         </p>
       </header>
 
       <section className="panel">
-        <h2>Filters</h2>
+        <h2>Archive Filters</h2>
+
+        <div className="quick-filter-row">
+          <button onClick={() => setPreset(7)}>Last 7 days</button>
+          <button onClick={() => setPreset(30)}>Last 30 days</button>
+          <button onClick={() => setPreset(90)}>Last 90 days</button>
+          <button onClick={clearFilters}>Clear</button>
+        </div>
 
         <div className="filters">
           <label>
-            Start date
+            Published from
             <input
               type="date"
               value={filters.start}
@@ -245,7 +284,7 @@ function ArchivePage() {
           </label>
 
           <label>
-            End date
+            Published until
             <input
               type="date"
               value={filters.end}
@@ -275,6 +314,8 @@ function ArchivePage() {
               <option value="research_paper">Research Paper</option>
               <option value="vulnerability_database">Vulnerability Database</option>
               <option value="policy_update">Policy Update</option>
+              <option value="security_framework">Security Framework</option>
+              <option value="ai_lab_update">AI Lab Update</option>
             </select>
           </label>
 
@@ -293,53 +334,36 @@ function ArchivePage() {
 
       <section className="section-header">
         <h2>{sources.length} Archived Sources</h2>
-        <p>Filtered across stored daily snapshots.</p>
+        <p>Filtered by source publish date.</p>
       </section>
 
-      <section className="source-grid">
-        {sources.map((source) => (
-          <SourceCard key={`${source.snapshot_id}-${source.id}`} source={source} />
-        ))}
-      </section>
+      {sources.length === 0 ? (
+        <section className="panel">
+          <h2>No archived sources found</h2>
+          <p>Try widening the publication date range or clearing filters.</p>
+        </section>
+      ) : (
+        <section className="source-grid">
+          {sources.map((source) => (
+            <SourceCard key={`${source.snapshot_id}-${source.id}`} source={source} />
+          ))}
+        </section>
+      )}
     </>
   );
 }
 
 export default function App() {
   const [page, setPage] = useState("daily");
-  const [snapshot, setSnapshot] = useState(null);
-  const [snapshots, setSnapshots] = useState([]);
-
-  useEffect(() => {
-      function loadAll() {
-        fetch("/api/sources")
-          .then((res) => res.json())
-          .then(setSnapshot)
-          .catch(console.error);
-
-        fetch("/api/snapshots")
-          .then((res) => res.json())
-          .then((data) => setSnapshots(data.snapshots || []))
-          .catch(console.error);
-      }
-
-      loadAll();
-
-      const interval = setInterval(loadAll, 5 * 60 * 1000);
-
-      return () => clearInterval(interval);
-    }, []);
-
-  if (!snapshot) return <main className="page">Loading...</main>;
 
   return (
     <main className="page">
       <Nav page={page} setPage={setPage} />
 
-      {page === "daily" && <DailyPage snapshot={snapshot} />}
-      {page === "weekly" && <PeriodPage period="weekly" snapshots={snapshots} />}
-      {page === "monthly" && <PeriodPage period="monthly" snapshots={snapshots} />}
-      {page === "quarterly" && <PeriodPage period="quarterly" snapshots={snapshots} />}
+      {page === "daily" && <SourcePage period="daily" />}
+      {page === "weekly" && <SourcePage period="weekly" />}
+      {page === "monthly" && <SourcePage period="monthly" />}
+      {page === "quarterly" && <SourcePage period="quarterly" />}
       {page === "archive" && <ArchivePage />}
     </main>
   );

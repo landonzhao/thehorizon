@@ -3,19 +3,23 @@ import { getSingaporePeriodWindow } from "../lib/time/reportingWindow.js";
 
 export default async function handler(req, res) {
   try {
-    const window = getSingaporePeriodWindow("daily");
+    const period = req.query.period || "daily";
+    const window = getSingaporePeriodWindow(period);
 
     const sources = await listSources({
       start: window.start_utc,
       end: window.end_utc,
-      limit: 1000,
+      publisher: req.query.publisher,
+      source_type: req.query.source_type,
+      tag: req.query.tag,
+      limit: 3000,
     });
 
     return res.status(200).json({
-      generated_at: new Date().toISOString(),
-      period: "daily",
-      stage: "daily_sources_by_publish_date",
+      period,
       reporting_window: window,
+      start: window.start_utc,
+      end: window.end_utc,
       count: sources.length,
       sources,
     });

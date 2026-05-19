@@ -316,3 +316,19 @@ a:hover {
 .snapshot-pill span {
   color: #94a3b8;
 }
+
+.quick-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.quick-filter-row button {
+  border: 1px solid #334155;
+  border-radius: 999px;
+  padding: 9px 13px;
+  background: #0f172a;
+  color: #e5e7eb;
+  cursor: pointer;
+}
