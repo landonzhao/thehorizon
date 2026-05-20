@@ -1,5 +1,10 @@
 import { collectRawSources } from "../lib/sources/collectRawSources.js";
 import { saveSnapshotToDatabase } from "../lib/storage/snapshotDatabase.js";
+import {
+  startIngestionRun,
+  finishIngestionRun,
+  failIngestionRun,
+} from "../lib/storage/ingestionRunStore.js";
 
 function isAuthorized(req) {
   const secret = process.env.CRON_SECRET;
@@ -11,10 +16,14 @@ function isAuthorized(req) {
 }
 
 export default async function handler(req, res) {
+  let runId = null;
+
   try {
     if (!isAuthorized(req)) {
       return res.status(401).json({ error: "Unauthorized" });
     }
+
+    runId = await startIngestionRun();
 
     const result = await collectRawSources();
 
@@ -44,12 +53,20 @@ export default async function handler(req, res) {
 
     const stored = await saveSnapshotToDatabase(snapshot);
 
+    await finishIngestionRun(runId, snapshot);
+
     return res.status(200).json({
+      run_id: runId,
       ...snapshot,
       stored,
     });
   } catch (error) {
+    if (runId) {
+      await failIngestionRun(runId, error);
+    }
+
     return res.status(500).json({
+      run_id: runId,
       error: error.message,
       stack: error.stack,
     });
