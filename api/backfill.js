@@ -1,34 +1,38 @@
 import { collectRawSources } from "../lib/sources/collectRawSources.js";
-import { saveSnapshot } from "../lib/storage/snapshotStore.js";
 import { saveSnapshotToDatabase } from "../lib/storage/snapshotDatabase.js";
 
 function isAuthorized(req) {
-  return req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
+  const secret = process.env.CRON_SECRET;
+  const auth = req.headers.authorization;
+  if (!secret) return true;
+  return auth === `Bearer ${secret}` || req.headers["x-vercel-cron"] === "1";
 }
 
-function makeSgtWindow(dateString) {
-  const endSgt = new Date(`${dateString}T06:00:00+08:00`);
-  const startSgt = new Date(endSgt.getTime() - 24 * 60 * 60 * 1000);
+function makeDayWindow(dateString) {
+  // Build a UTC window that spans the calendar day in SGT (UTC+8)
+  // Start: dateString 00:00 SGT = dateString-1 16:00 UTC
+  // End:   dateString 24:00 SGT = dateString   16:00 UTC
+  const endSgt = new Date(`${dateString}T00:00:00+08:00`);
+  endSgt.setDate(endSgt.getDate() + 1); // next day 00:00 SGT
+  const startSgt = new Date(`${dateString}T00:00:00+08:00`);
 
   return {
     timezone: "Asia/Singapore",
-    start_local: startSgt.toISOString(),
-    end_local: endSgt.toISOString(),
-    start_utc: startSgt.toISOString(),
-    end_utc: endSgt.toISOString(),
+    start_sgt: startSgt.toISOString(),
+    end_sgt: endSgt.toISOString(),
+    start_utc: new Date(startSgt.getTime() - 8 * 60 * 60 * 1000).toISOString(),
+    end_utc: new Date(endSgt.getTime() - 8 * 60 * 60 * 1000).toISOString(),
   };
 }
 
-function dateRange(start, end, maxDays = 7) {
+function dateRange(startStr, endStr, maxDays = 14) {
   const dates = [];
-  const current = new Date(start);
-  const final = new Date(end);
-
+  const current = new Date(startStr);
+  const final = new Date(endStr);
   while (current <= final && dates.length < maxDays) {
     dates.push(current.toISOString().slice(0, 10));
-    current.setDate(current.getDate() + 1);
+    current.setUTCDate(current.getUTCDate() + 1);
   }
-
   return dates;
 }
 
@@ -38,24 +42,30 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const start = req.query.start || "2026-01-01";
-    const end = req.query.end || "2026-05-19";
-    const maxDays = Number(req.query.maxDays || 7);
+    const today = new Date().toISOString().slice(0, 10);
+    const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const start = req.query.start || twoWeeksAgo;
+    const end = req.query.end || today;
+    const maxDays = Math.min(Number(req.query.maxDays || 14), 30);
+
+    // includeFeeds=true by default so RSS feeds are included for recent windows.
+    // Set ?includeFeeds=false to run only API connectors (NVD, arXiv, AIID).
+    const includeFeeds = req.query.includeFeeds !== "false";
 
     const dates = dateRange(start, end, maxDays);
     const results = [];
+    let totalSources = 0;
 
     for (const date of dates) {
-      const window = makeSgtWindow(date);
+      const window = makeDayWindow(date);
 
-      const result = await collectRawSources(window, {
-        includeFeeds: false,
-      });
+      const result = await collectRawSources(window, { includeFeeds });
 
       const snapshot = {
         generated_at: new Date().toISOString(),
         period: "daily",
-        stage: "historical_backfill_by_date_published",
+        stage: "backfill_by_date_published",
         reporting_window: result.reporting_window,
         count: result.sources.length,
         removed_by_publish_date_count: result.removed_by_publish_date_count,
@@ -67,28 +77,31 @@ export default async function handler(req, res) {
         connector_results: result.connector_results,
       };
 
-      await saveSnapshot(snapshot);
       const stored = await saveSnapshotToDatabase(snapshot);
+      totalSources += snapshot.count;
 
       results.push({
         date,
         count: snapshot.count,
+        pipeline_counts: snapshot.pipeline_counts,
         stored,
       });
     }
 
+    const lastDate = dates[dates.length - 1];
+    const nextStart = lastDate
+      ? new Date(new Date(lastDate).getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      : null;
+
     return res.status(200).json({
-      message: "Backfill chunk complete",
+      message: "Backfill complete",
       start,
       end,
+      include_feeds: includeFeeds,
       processed_days: dates.length,
+      total_sources_ingested: totalSources,
       results,
-      next_start:
-        dates.length > 0
-          ? new Date(new Date(dates[dates.length - 1]).getTime() + 24 * 60 * 60 * 1000)
-              .toISOString()
-              .slice(0, 10)
-          : null,
+      next_start: nextStart,
     });
   } catch (error) {
     return res.status(500).json({

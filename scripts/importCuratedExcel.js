@@ -59,11 +59,25 @@ function sourceTypeFromPublisher(publisher) {
 }
 
 function tagsFromSheet(sheetName) {
-  if (sheetName === "Security of AI") return ["security_of_ai"];
-  if (sheetName === "AI for Cyber") return ["ai_for_security"];
-  if (sheetName === "AI-Enabled Threats") return ["ai_enabled_threats"];
-
+  if (sheetName === "Security of AI") return ["security_of_ai", "curated"];
+  if (sheetName === "AI for Cyber") return ["ai_for_security", "curated"];
+  if (sheetName === "AI-Enabled Threats") return ["ai_enabled_threats", "curated"];
   return ["curated"];
+}
+
+// Curated sources are hand-picked — assign baseline scores so the classifier
+// never deletes them and the scoring pipeline ranks them appropriately.
+function baselineFromSheet(sheetName) {
+  if (sheetName === "Security of AI") {
+    return { ai_specificity_score: 80, relevance_tier: "core", main_category: "traditional_ai_threats" };
+  }
+  if (sheetName === "AI for Cyber") {
+    return { ai_specificity_score: 65, relevance_tier: "core", main_category: "ai_for_security" };
+  }
+  if (sheetName === "AI-Enabled Threats") {
+    return { ai_specificity_score: 75, relevance_tier: "core", main_category: "ai_enabled_threats" };
+  }
+  return { ai_specificity_score: 70, relevance_tier: "core", main_category: "uncategorised" };
 }
 
 function getSgtWindowForDate(dateIso) {
@@ -112,6 +126,8 @@ for (const sheetName of acceptedSheets) {
 
   const data = XLSX.utils.sheet_to_json(sheet);
 
+  const baseline = baselineFromSheet(sheetName);
+
   for (const row of data) {
     const title = cleanPlaintext(row.Title);
     const url = cleanPlaintext(row.URL);
@@ -140,6 +156,7 @@ for (const sheetName of acceptedSheets) {
       tags: tagsFromSheet(sheetName),
       content_hash,
       clean_text_hash: sha256(usableText),
+      ...baseline,
     });
   }
 }
@@ -216,6 +233,9 @@ for (const group of grouped.values()) {
       summary: row.summary,
       source_text_quality: row.source_text_quality,
       needs_full_text_fetch: row.needs_full_text_fetch,
+      relevance_tier: row.relevance_tier,
+      ai_specificity_score: row.ai_specificity_score,
+      main_category: row.main_category,
       attachments: [],
       trust_tier: "curated",
       validity: {
@@ -276,6 +296,10 @@ for (const group of grouped.values()) {
     content_hash: source.content_hash,
     clean_text_hash: source.clean_text_hash,
     blob_path: blob.url,
+    // Baseline AI relevance fields so curated sources are never purged
+    relevance_tier: source.relevance_tier,
+    ai_specificity_score: source.ai_specificity_score,
+    main_category: source.main_category,
   }));
 
   const { error: sourceError } = await supabase

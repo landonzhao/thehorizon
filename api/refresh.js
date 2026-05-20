@@ -1,5 +1,6 @@
 import { collectRawSources } from "../lib/sources/collectRawSources.js";
 import { saveSnapshotToDatabase } from "../lib/storage/snapshotDatabase.js";
+import { getSingaporePeriodWindow } from "../lib/time/reportingWindow.js";
 import {
   startIngestionRun,
   finishIngestionRun,
@@ -23,14 +24,37 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
+    // ?days=N runs a wider ingestion window (e.g. 14 for the past two weeks).
+    // Defaults to 1 (standard daily run) when not specified.
+    const days = Math.min(Number(req.query.days || 1), 30);
+    const period = days <= 1 ? "daily" : days <= 7 ? "weekly" : "monthly";
+    const window = days <= 1 ? null : getSingaporePeriodWindow(
+      days <= 7 ? "weekly" : "monthly"
+    );
+
+    // For windows > 7 days, build a custom window using the days param
+    const customWindow = days <= 1 ? null : (() => {
+      const now = new Date();
+      const end = new Date(now);
+      end.setUTCHours(23, 59, 59, 999);
+      const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
+      return {
+        timezone: "Asia/Singapore",
+        start_utc: start.toISOString(),
+        end_utc: end.toISOString(),
+        start_sgt: new Date(start.getTime() + 8 * 60 * 60 * 1000).toISOString(),
+        end_sgt: new Date(end.getTime() + 8 * 60 * 60 * 1000).toISOString(),
+      };
+    })();
+
     runId = await startIngestionRun();
 
-    const result = await collectRawSources();
+    const result = await collectRawSources(customWindow);
 
     const snapshot = {
       generated_at: new Date().toISOString(),
-      period: "daily",
-      stage: "published_date_based_ingestion",
+      period,
+      stage: days > 1 ? `wide_window_ingestion_${days}d` : "published_date_based_ingestion",
       reporting_window: result.reporting_window,
 
       count: result.sources.length,
@@ -57,6 +81,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       run_id: runId,
+      days_window: days,
       ...snapshot,
       stored,
     });
