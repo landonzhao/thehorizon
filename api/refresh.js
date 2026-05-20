@@ -1,5 +1,4 @@
 import { collectRawSources } from "../lib/sources/collectRawSources.js";
-import { saveSnapshot } from "../lib/storage/snapshotStore.js";
 import { saveSnapshotToDatabase } from "../lib/storage/snapshotDatabase.js";
 
 function isAuthorized(req) {
@@ -22,25 +21,33 @@ export default async function handler(req, res) {
     const snapshot = {
       generated_at: new Date().toISOString(),
       period: "daily",
-      stage: "article_report_advisory_ingestion",
+      stage: "published_date_based_ingestion",
       reporting_window: result.reporting_window,
 
       count: result.sources.length,
-      discarded_count: result.discarded_count,
+
+      removed_by_publish_date_count: result.removed_by_publish_date_count,
+      removed_by_publish_date: result.removed_by_publish_date,
+
       rejected_count: result.rejected_count,
+      rejected_sources: result.rejected_sources,
+
+      discarded_count: result.discarded_count,
+      discarded_by_validity: result.discarded_by_validity,
 
       pipeline_counts: result.pipeline_counts,
-      rejected_sources: result.rejected_sources,
 
       sources: result.sources,
       archive: result.archive,
       connector_results: result.connector_results,
     };
 
-    await saveSnapshot(snapshot);
     const stored = await saveSnapshotToDatabase(snapshot);
 
-    return res.status(200).json(stored);
+    return res.status(200).json({
+      ...snapshot,
+      stored,
+    });
   } catch (error) {
     return res.status(500).json({
       error: error.message,
