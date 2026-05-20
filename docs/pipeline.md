@@ -62,6 +62,8 @@ attachInitialTags (lib/sources/tagSource.js) runs a fast rule-based pass to atta
 
 ## Stage 7: Snapshot Persistence
 
+After tagging, collectRawSources attempts to upload a local JSON archive via archiveSources (lib/archive/archiveStore.js → lib/storage/blobArchiveStore.js). This is wrapped in a try/catch and skipped silently if it fails (expected on Vercel where the archive blob path may not be configured).
+
 saveSnapshotToDatabase (lib/storage/snapshotDatabase.js):
 1. Uploads the full snapshot JSON to Vercel Blob at snapshots/snapshot-YYYY-MM-DD.json
 2. Upserts a row in the snapshots table with metadata and blob_path
@@ -77,13 +79,17 @@ ingestion_runs table is updated by api/refresh.js via ingestionRunStore (lib/sto
 Entry point: lib/classification/classifyStoredSources.js
 Called by: api/classify-sources.js
 
-This step reads sources from the database and classifies each one. The decision tree per source:
+This step reads sources from the database and classifies each one. Each source is processed inside a try/catch — a failure on one source is logged and skipped, it does not abort the remaining batch.
 
-1. If OPENAI_API_KEY or GEMINI_API_KEY is set and claim_extraction_status is null (not yet enriched): call extractClaimsWithGemini (despite the name, this now tries OpenAI first, Gemini as fallback). The result provides tags, main_category, ai_specificity_score, short_summary, analyst_brief, and intelligence metadata.
+The decision tree per source:
 
-2. If no LLM key or LLM call fails: run classifySourceWithRules (lib/classification/ruleBasedClassifier.js), which matches PHRASE_RULES against the source text to assign tags and main_category, then runs computeRuleAiSpecificity to score AI relevance based on weighted phrase matching from TAG_DEFINITIONS.
+1. LLM enrichment: if OPENAI_API_KEY or GEMINI_API_KEY is set and claim_extraction_status is null (not yet enriched), call enrichSource (lib/claims/enrichSource.js). OpenAI is tried first; Gemini is the fallback when only GEMINI_API_KEY is present. If the LLM call throws, a warning is logged and the source falls back to rule-based classification.
 
-3. Deletion: if ai_specificity_score < 10 and trust_tier != "curated", the source is hard-deleted. Curated sources are never deleted.
+   enrichSource returns: tags, main_category, ai_specificity_score, category_confidence, short_summary, analyst_brief, and intelligence metadata.
+
+2. Rule-based fallback: if no LLM key is available or the LLM call failed, classifySourceWithRules (lib/classification/ruleBasedClassifier.js) matches PHRASE_RULES against the source text to assign tags and main_category, then computeRuleAiSpecificity scores AI relevance based on weighted phrase matching from TAG_DEFINITIONS.
+
+3. Deletion: if ai_specificity_score < 10 and trust_tier != "curated", the source is hard-deleted. Curated sources are never deleted regardless of score.
 
 4. Tier assignment based on ai_specificity_score:
    - core: score >= 40 (AI threat is the primary subject)
@@ -92,13 +98,17 @@ This step reads sources from the database and classifies each one. The decision 
 
 5. The source row is updated with tags, main_category, ai_specificity_score, relevance_tier, and if LLM enrichment ran: short_summary, analyst_brief, intelligence, claim_extraction_status = "success".
 
-The classify step adds a 7s delay between LLM calls to stay within free-tier rate limits (approx 8 calls/minute against Gemini's 10 RPM free limit). OpenAI paid tier has no meaningful rate limit at this volume.
+Rate limiting: a 7s delay between calls is applied only when Gemini is the active provider (OPENAI_API_KEY absent, GEMINI_API_KEY present). When OpenAI is the provider there is no inter-call delay.
+
+Returns: count, deleted_count, error_count, llm_count, rule_count, tier_counts (core/adjacent/context), sources, deleted, errors.
 
 
 ## Stage 9: Scoring (scoreStoredSources)
 
 Entry point: lib/scoring/scoreSource.js, lib/scoring/scoreStoredSources.js
 Called by: api/score-sources.js
+
+Each source is scored inside a try/catch — a write failure on one source is logged and skipped, it does not abort the remaining batch.
 
 scoreSource computes two composite scores for each source:
 
@@ -119,6 +129,8 @@ report_score — used for report ranking. Sum of:
 - novelty_score
 
 priority_label maps priority_score to: critical (>=90), high (>=75), medium (>=55), low (>=35), background.
+
+Returns: count, error_count, score_version, errors.
 
 
 ## Stage 10: Report Generation
@@ -163,7 +175,10 @@ Each query uses the arXiv search API with submittedDate range filtering when a w
 
 ## LLM Enrichment Detail
 
-lib/claims/extractClaimsWithGemini.js (the name is historical; it now supports both providers).
+Entry point: lib/claims/enrichSource.js
+Exports: enrichSource(source)
+
+The function selects provider based on available keys: OpenAI (gpt-4o-mini) if OPENAI_API_KEY is set, otherwise Gemini (gemini-2.5-flash) if GEMINI_API_KEY is set. If neither key is present, it returns empty placeholders and classification falls back to rules.
 
 The prompt instructs the model to act as a senior AI security intelligence analyst and return a strict JSON object with:
 - short_summary: 3 information-dense sentences
@@ -174,4 +189,13 @@ The prompt instructs the model to act as a senior AI security intelligence analy
 
 The response is parsed and validated by validateClaims.js which sanitizes all fields and enforces allowed values (e.g. threat_maturity must be one of emerging/growing/established/declining).
 
-OpenAI is tried first if OPENAI_API_KEY is present. Gemini is used if only GEMINI_API_KEY is present. If both are absent, the function returns empty placeholders and classification falls back to rules.
+
+## Classification Module Structure
+
+lib/classification/ contains:
+- classifyStoredSources.js — orchestrator: fetches sources, runs enrichSource or rule-based, writes results back
+- ruleBasedClassifier.js — phrase-matching fallback: matches PHRASE_RULES against source text, assigns tags and category
+- tagDefinitions.js — TAG_DEFINITIONS array with phrase lists and ai_weight values used for rule-based AI specificity scoring
+- allowedTags.js — ALLOWED_TAGS list and MAIN_CATEGORIES used for validation
+- phraseRules.js — PHRASE_RULES array used by ruleBasedClassifier
+- purgeIrrelevantSources.js — standalone purge logic called by api/purge-irrelevant.js

@@ -33,16 +33,22 @@ GEMINI_API_KEY — fallback LLM (gemini-2.5-flash); free tier is 20 req/day
   /lib/sources — ingestion: connectors, registry, normalization, filtering
   /lib/cleaning — text cleaning utilities
   /lib/classification — tagging, categorization, AI specificity scoring
-  /lib/claims — LLM enrichment (OpenAI/Gemini extraction)
+  /lib/claims — LLM enrichment: enrichSource.js (OpenAI primary / Gemini fallback), validateClaims.js, processSourceClaims.js
   /lib/scoring — priority and report scoring
   /lib/reports — report generation logic
   /lib/storage — Supabase client, snapshot persistence, Vercel Blob
-  /lib/archive — local JSON archive writing (dev only)
+  /lib/archive — local JSON archive writing (dev only, gracefully skipped on Vercel)
   /lib/time — reporting window calculations (SGT-anchored)
   /lib/utils — deduplication
   /lib/validation — source validity checks, URL safety
 /scripts — local Node.js scripts for operations that exceed Vercel's timeout
-/src — React frontend (App.jsx, style.css)
+/src — React frontend
+  /src/constants.js — category labels, ordering, period day counts
+  /src/utils.js — formatting and grouping helpers
+  /src/components — SourceCard.jsx, CategorySection.jsx, Nav.jsx
+  /src/pages — ReportPage.jsx, SourcePage.jsx, ArchivePage.jsx
+  /src/App.jsx — root component (routing only)
+  /src/style.css — all styles
 /public — static assets
 
 
@@ -118,7 +124,7 @@ npx vercel dev — starts full local environment with API functions on :3000 (us
 
 Scripts that must be run locally (Vercel timeout is 10s for most operations):
 - node scripts/backfillSources.js [start] [end] [connectors] — historical ingestion
-- node scripts/enrichSources.js [limit] [delay_ms] — LLM enrichment of stored sources
+- node scripts/enrichSources.js [limit] [delay_ms] — LLM enrichment of stored sources; requires OPENAI_API_KEY or GEMINI_API_KEY; default delay 7000ms (Gemini free tier), use 500ms or less with OpenAI
 - node scripts/importCuratedExcel.js — import curated sources from imports/ Excel file
 
 After backfill, run in order:

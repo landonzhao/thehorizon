@@ -1,21 +1,22 @@
 /**
- * Gemini intelligence enrichment script.
+ * LLM intelligence enrichment script.
  *
- * Runs extractClaimsWithGemini on sources that haven't been enriched yet,
+ * Runs enrichSource on sources that haven't been enriched yet,
  * with rate-limit-safe delays between calls.
  *
  * Usage:
  *   node scripts/enrichSources.js [limit] [delay_ms]
- *   node scripts/enrichSources.js 100 7000   # 100 sources, 7s between calls
- *   node scripts/enrichSources.js             # 537 sources, 7s delay (default)
+ *   node scripts/enrichSources.js 100 7000   # 100 sources, 7s between calls (Gemini free tier)
+ *   node scripts/enrichSources.js 100 500    # 100 sources, 0.5s between calls (OpenAI paid)
+ *   node scripts/enrichSources.js             # all unenriched, 7s delay (default)
  *
- * Free tier: ~10 RPM → 7000ms delay keeps safely under.
- * Paid tier: 1000+ RPM → use delay_ms=200 or 0.
+ * OpenAI (primary): no meaningful rate limit at this volume, use delay_ms=500 or less.
+ * Gemini free tier: ~10 RPM → 7000ms delay keeps safely under.
  */
 
 import "dotenv/config";
 import { supabase } from "../lib/storage/supabaseClient.js";
-import { extractClaimsWithGemini } from "../lib/claims/extractClaimsWithGemini.js";
+import { enrichSource } from "../lib/claims/enrichSource.js";
 import { classifySourceWithRules } from "../lib/classification/ruleBasedClassifier.js";
 import { ALLOWED_TAGS } from "../lib/classification/allowedTags.js";
 
@@ -31,10 +32,12 @@ function pad(n, w = 4) { return String(n).padStart(w, " "); }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-if (!process.env.GEMINI_API_KEY) {
-  console.error("GEMINI_API_KEY not set — aborting.");
+if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
+  console.error("Neither OPENAI_API_KEY nor GEMINI_API_KEY is set — aborting.");
   process.exit(1);
 }
+
+const provider = process.env.OPENAI_API_KEY ? "OpenAI" : "Gemini";
 
 // Fetch sources without Gemini enrichment
 const { data: sources, error } = await supabase
@@ -50,7 +53,7 @@ const total = sources?.length || 0;
 const etaMinutes = Math.ceil((total * delayMs) / 60000);
 
 console.log(`\n${"═".repeat(60)}`);
-console.log(` Gemini Enrichment Run`);
+console.log(` LLM Enrichment Run (${provider})`);
 console.log(` Sources to enrich : ${total}`);
 console.log(` Delay between calls: ${delayMs}ms`);
 console.log(` Estimated time    : ~${etaMinutes} min`);
@@ -67,7 +70,7 @@ for (let i = 0; i < total; i++) {
   process.stdout.write(`${progress} ${source.title?.slice(0, 60)}… `);
 
   try {
-    const extraction = await extractClaimsWithGemini(source);
+    const extraction = await enrichSource(source);
     const cl = extraction.classification;
 
     const ai_specificity_score = cl.ai_specificity_score ?? 0;

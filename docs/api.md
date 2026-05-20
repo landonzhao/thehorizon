@@ -31,11 +31,13 @@ Query params:
 - limit (default 1000): max sources to process per call
 - start, end: optional date filters on date_published
 
-Reads sources from Supabase, runs rule-based classification on all of them, runs LLM enrichment on sources where claim_extraction_status is null (if API key present). Deletes sources with ai_specificity_score < 10 (except curated). Updates all surviving sources with tags, main_category, ai_specificity_score, relevance_tier, and optionally intelligence/summary fields.
+Reads sources from Supabase, runs LLM enrichment (via enrichSource — OpenAI primary, Gemini fallback) on sources where claim_extraction_status is null and an API key is present, falls back to rule-based classification otherwise. Deletes sources with ai_specificity_score < 10 (except curated). Updates all surviving sources with tags, main_category, ai_specificity_score, relevance_tier, and optionally intelligence/summary fields.
+
+Each source is processed in an isolated try/catch. A failure on one source is logged and counted in error_count; it does not abort the remaining batch.
 
 Must be run 2-3 times after a large backfill to cover all sources, since the limit applies per call.
 
-Returns: count, deleted_count, gemini_count, rule_count, tier_counts (core/adjacent/context).
+Returns: count, deleted_count, error_count, llm_count, rule_count, tier_counts (core/adjacent/context), sources, deleted, errors.
 
 
 ### POST /api/score-sources
@@ -48,7 +50,9 @@ Query params:
 
 Reads all sources (or filtered subset), runs scoreSource on each, writes back priority_score, priority_label, priority_reason, report_score, report_quality_score, horizon_signal_score, and all sub-scores.
 
-Returns: count, score_version.
+Each source is processed in an isolated try/catch. A write failure on one source is logged and counted in error_count; it does not abort the remaining batch.
+
+Returns: count, error_count, score_version, errors.
 
 
 ### POST /api/backfill
@@ -77,7 +81,7 @@ Use with caution. classify-sources handles deletion as part of classification, s
 
 ### POST /api/extract-claims
 
-Runs LLM enrichment (extractClaimsWithGemini) directly on a batch of sources. Mostly superseded by classify-sources which now handles enrichment inline. Use scripts/enrichSources.js for bulk enrichment instead, which handles rate limits properly.
+Runs LLM enrichment (enrichSource) directly on a batch of sources. Mostly superseded by classify-sources which now handles enrichment inline. Use scripts/enrichSources.js for bulk enrichment instead, which handles rate limits properly.
 
 
 ## Read Endpoints (public or lightly authenticated)
