@@ -332,3 +332,62 @@ a:hover {
   color: #e5e7eb;
   cursor: pointer;
 }
+
+.category-section {
+  margin-top: 36px;
+}
+
+.category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #1f2937;
+}
+
+.category-header h2 {
+  margin: 4px 0 0;
+}
+
+.category-header strong {
+  min-width: 42px;
+  text-align: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(96, 165, 250, 0.14);
+  color: #bfdbfe;
+}
+
+.category-pill {
+  display: inline-flex;
+  width: fit-content;
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.reason {
+  margin: 8px 0;
+  color: #94a3b8;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.tag-box {
+  margin: 14px 0;
+}
+
+.tag-box p {
+  margin: 0 0 8px;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}

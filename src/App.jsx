@@ -1,6 +1,24 @@
 import { useEffect, useState } from "react";
 import "./style.css";
 
+const CATEGORY_ORDER = [
+  "traditional_ai_threats",
+  "llm_threats",
+  "agentic_ai_threats",
+  "ai_enabled_threats",
+  "ai_for_security",
+  "uncategorised",
+];
+
+const CATEGORY_LABELS = {
+  traditional_ai_threats: "Security of AI — Traditional AI Threats",
+  llm_threats: "Security of AI — LLM Threats",
+  agentic_ai_threats: "Security of AI — Agentic AI Threats",
+  ai_enabled_threats: "AI-Enabled Threats",
+  ai_for_security: "AI for Security",
+  uncategorised: "Uncategorised / Needs Review",
+};
+
 function formatLabel(value = "") {
   return String(value || "unknown")
     .replaceAll("_", " ")
@@ -25,8 +43,50 @@ function getCredibilityLabel(source) {
   return source.validity?.credibility_label || source.credibility_label || "unknown";
 }
 
+function getCategory(source) {
+  return source.main_category || "uncategorised";
+}
+
+function groupByCategory(sources = []) {
+  const groups = {};
+
+  for (const category of CATEGORY_ORDER) {
+    groups[category] = [];
+  }
+
+  for (const source of sources) {
+    const category = getCategory(source);
+
+    if (!groups[category]) {
+      groups[category] = [];
+    }
+
+    groups[category].push(source);
+  }
+
+  return groups;
+}
+
+function TagList({ tags = [] }) {
+  if (!tags.length) return null;
+
+  const cleanTags = [...new Set(tags)].filter(Boolean);
+
+  return (
+    <div className="tag-box">
+      <p>Tags</p>
+      <div className="tag-row">
+        {cleanTags.map((tag) => (
+          <span key={tag}>{formatLabel(tag)}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SourceCard({ source }) {
   const credibility = getCredibilityLabel(source);
+  const category = getCategory(source);
 
   return (
     <article className="source-card">
@@ -46,24 +106,50 @@ function SourceCard({ source }) {
         {formatDate(source.date_published)}
       </p>
 
+      <div className="category-pill">
+        {CATEGORY_LABELS[category] || formatLabel(category)}
+      </div>
+
+      {source.category_reason && (
+        <p className="reason">
+          <strong>Category reason:</strong> {source.category_reason}
+        </p>
+      )}
+
       <p className="summary">
-        {source.full_text?.slice(0, 360) ||
-          source.summary?.slice(0, 360) ||
+        {source.full_text?.slice(0, 420) ||
+          source.summary?.slice(0, 420) ||
           "No text extracted."}
       </p>
 
-      {source.tags?.length > 0 && (
-        <div className="tag-row">
-          {source.tags.map((tag) => (
-            <span key={tag}>{formatLabel(tag)}</span>
-          ))}
-        </div>
-      )}
+      <TagList tags={source.tags || []} />
 
       <a href={source.url} target="_blank" rel="noreferrer">
         Open source →
       </a>
     </article>
+  );
+}
+
+function CategorySection({ category, sources }) {
+  if (!sources.length) return null;
+
+  return (
+    <section className="category-section">
+      <div className="category-header">
+        <div>
+          <p className="eyebrow">Category</p>
+          <h2>{CATEGORY_LABELS[category] || formatLabel(category)}</h2>
+        </div>
+        <strong>{sources.length}</strong>
+      </div>
+
+      <div className="source-grid">
+        {sources.map((source) => (
+          <SourceCard key={source.id} source={source} />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -109,6 +195,7 @@ function SourcePage({ period }) {
   }
 
   const sources = data.sources || [];
+  const grouped = groupByCategory(sources);
 
   return (
     <>
@@ -116,8 +203,8 @@ function SourcePage({ period }) {
         <p className="eyebrow">{formatLabel(period)} Intake</p>
         <h1>{formatLabel(period)} AI Threat Sources</h1>
         <p>
-          Articles, reports, advisories, and research items filtered by
-          publication date, not access date.
+          Articles, reports, advisories, and research items grouped by main AI
+          threat category. Filtering uses publication date, not access date.
         </p>
       </header>
 
@@ -128,31 +215,36 @@ function SourcePage({ period }) {
         </div>
 
         <div className="metric-card">
-          <p>Rejected</p>
-          <strong>{data.rejected_count || 0}</strong>
-        </div>
-
-        <div className="metric-card">
-          <p>Discarded</p>
-          <strong>{data.discarded_count || 0}</strong>
+          <p>Categories represented</p>
+          <strong>
+            {
+              Object.values(grouped).filter((items) => items.length > 0)
+                .length
+            }
+          </strong>
         </div>
 
         <div className="metric-card">
           <p>Generated</p>
           <strong>{formatDate(data.generated_at)}</strong>
         </div>
+
+        <div className="metric-card">
+          <p>Mode</p>
+          <strong>Published Date</strong>
+        </div>
       </section>
 
       {(data.reporting_window || data.start) && (
-          <section className="panel">
-            <h2>Publication Window</h2>
-            <p>
-              {formatDate(data.reporting_window?.start_utc || data.start)} SGT →{" "}
-              {formatDate(data.reporting_window?.end_utc || data.end)} SGT
-            </p>
-            <p>Filtered using source publish date.</p>
-          </section>
-        )}
+        <section className="panel">
+          <h2>Publication Window</h2>
+          <p>
+            {formatDate(data.reporting_window?.start_utc || data.start)} SGT →{" "}
+            {formatDate(data.reporting_window?.end_utc || data.end)} SGT
+          </p>
+          <p>Filtered using source publish date.</p>
+        </section>
+      )}
 
       {data.connector_results && (
         <section className="panel">
@@ -171,25 +263,22 @@ function SourcePage({ period }) {
         </section>
       )}
 
-      <section className="section-header">
-        <h2>{formatLabel(period)} Articles / Reports / Advisories</h2>
-        <p>These are source items only. Classification and analysis come next.</p>
-      </section>
-
       {sources.length === 0 ? (
         <section className="panel">
           <h2>No sources found</h2>
           <p>
             No source records matched this period. Check whether the database has
-            sources with valid publication dates.
+            sources with valid publication dates and categories.
           </p>
         </section>
       ) : (
-        <section className="source-grid">
-          {sources.map((source) => (
-            <SourceCard key={source.id} source={source} />
-          ))}
-        </section>
+        CATEGORY_ORDER.map((category) => (
+          <CategorySection
+            key={category}
+            category={category}
+            sources={grouped[category] || []}
+          />
+        ))
       )}
     </>
   );
@@ -252,6 +341,8 @@ function ArchivePage() {
     loadArchive();
   }, []);
 
+  const grouped = groupByCategory(sources);
+
   return (
     <>
       <header className="hero">
@@ -259,7 +350,7 @@ function ArchivePage() {
         <h1>Stored Source Archive</h1>
         <p>
           Search archived sources by publication date, publisher, source type,
-          and tag.
+          and tag. Results are grouped by main category.
         </p>
       </header>
 
@@ -322,7 +413,7 @@ function ArchivePage() {
           <label>
             Tag
             <input
-              placeholder="vulnerability, agentic_ai..."
+              placeholder="prompt_injection, ai_phishing..."
               value={filters.tag}
               onChange={(e) => updateFilter("tag", e.target.value)}
             />
@@ -334,7 +425,7 @@ function ArchivePage() {
 
       <section className="section-header">
         <h2>{sources.length} Archived Sources</h2>
-        <p>Filtered by source publish date.</p>
+        <p>Filtered by source publish date and grouped by category.</p>
       </section>
 
       {sources.length === 0 ? (
@@ -343,11 +434,13 @@ function ArchivePage() {
           <p>Try widening the publication date range or clearing filters.</p>
         </section>
       ) : (
-        <section className="source-grid">
-          {sources.map((source) => (
-            <SourceCard key={`${source.snapshot_id}-${source.id}`} source={source} />
-          ))}
-        </section>
+        CATEGORY_ORDER.map((category) => (
+          <CategorySection
+            key={category}
+            category={category}
+            sources={grouped[category] || []}
+          />
+        ))
       )}
     </>
   );
