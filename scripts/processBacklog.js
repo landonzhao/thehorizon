@@ -5,18 +5,31 @@
  * in the database has been classified and enriched. Designed to run
  * unattended overnight or as a scheduled task.
  *
+ * Phase 1 (classify) uses rule-based classification only — no LLM calls.
+ * This is fast and avoids burning API quota on category/tag assignment.
+ * Phase 2 (enrich) calls the LLM for full intelligence extraction with
+ * proper rate limiting between calls.
+ *
  * Provider rotation: OpenAI → Groq (free) → Gemini Flash → Gemini 2.5
  * Automatically skips providers that return quota errors and moves to the next.
+ * Rate limit errors (429) retry with backoff before moving to next provider.
  *
  * Usage:
  *   node scripts/processBacklog.js               # enrich all pending, 1s delay
- *   node scripts/processBacklog.js 50 500        # batch size 50, 500ms delay
+ *   node scripts/processBacklog.js 20 20000      # 20 sources/batch, 20s delay (Groq free)
+ *   node scripts/processBacklog.js 50 500        # batch size 50, 500ms delay (OpenAI paid)
  *   node scripts/processBacklog.js 100 0 classify-only  # only classify, no enrichment
  *
  * Arguments:
- *   batchSize  — sources per enrichment batch (default: 50)
- *   delayMs    — ms between enrichment calls (default: 1000; use 7000 for Gemini free)
+ *   batchSize  — sources per enrichment batch (default: 20)
+ *   delayMs    — ms between enrichment calls (default: 20000 for Groq free tier safety)
+ *               Use 500ms or less with OpenAI paid. Use 7000ms for Gemini free (20 RPD).
  *   mode       — "full" (default), "classify-only", "enrich-only"
+ *
+ * Rate guide (free tiers):
+ *   Groq llama-3.3-70b:  30 RPM, 14,400 TPM — use delayMs=20000 (~3 req/min safe)
+ *   Gemini 2.0 Flash:    15 RPM, 1M TPD     — use delayMs=4000
+ *   OpenAI gpt-4o-mini:  (paid) no meaningful limit at this volume
  */
 
 import "dotenv/config";
@@ -25,8 +38,8 @@ import { enrichSource } from "../lib/claims/enrichSource.js";
 import { classifyStoredSources } from "../lib/classification/classifyStoredSources.js";
 import { scoreSource } from "../lib/scoring/scoreSource.js";
 
-const batchSize = parseInt(process.argv[2] || "50");
-const delayMs   = parseInt(process.argv[3] || "1000");
+const batchSize = parseInt(process.argv[2] || "20");
+const delayMs   = parseInt(process.argv[3] || "20000");
 const mode      = process.argv[4] || "full";
 
 const CLASSIFY_VERSION   = "classify-v2.0";
@@ -43,7 +56,8 @@ function bar(done, total, width = 30) {
 // ── Classify pass ─────────────────────────────────────────────────────────────
 
 async function runClassifyBatch() {
-  const result = await classifyStoredSources({ limit: 500 });
+  // Rule-based only — Phase 2 handles LLM enrichment with proper rate limiting.
+  const result = await classifyStoredSources({ limit: 500, useLLM: false });
   return {
     classified: result.classified ?? result.count ?? 0,
     deleted: result.deleted?.length ?? result.deleted_count ?? 0,
@@ -219,7 +233,7 @@ if (mode !== "classify-only") {
   if (totalPending === 0) {
     console.log("Phase 2: Enrich — nothing pending, all sources enriched.\n");
   } else {
-    const etaMin = Math.ceil((totalPending * (delayMs + 3000)) / 60000);
+    const etaMin = Math.ceil((totalPending * (delayMs + 8000)) / 60000);
     console.log(`Phase 2: Enrich ${totalPending} pending sources`);
     console.log(`  Estimated time: ~${etaMin} min (actual LLM latency may vary)\n`);
 
@@ -277,7 +291,10 @@ console.log(` Backlog processor complete.`);
 console.log(`   Total enriched : ${enrichedTotal}`);
 console.log(`   Still pending  : ${pendingFinal}`);
 if (pendingFinal > 0) {
-  console.log(`\n   To finish: add GROQ_API_KEY to .env, then re-run:`);
-  console.log(`   node scripts/processBacklog.js ${batchSize} 1000`);
+  const groqKey = !!process.env.GROQ_API_KEY;
+  const tip = groqKey
+    ? `node scripts/processBacklog.js ${batchSize} 20000   # Groq free (20s delay)`
+    : `Add GROQ_API_KEY to .env (free at console.groq.com), then:\n   node scripts/processBacklog.js ${batchSize} 20000`;
+  console.log(`\n   To finish: ${tip}`);
 }
 console.log(`${"═".repeat(65)}\n`);
