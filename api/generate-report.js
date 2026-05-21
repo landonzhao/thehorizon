@@ -1,4 +1,4 @@
-import { generateReport } from "../lib/reports/generateReport.js";
+import { generateReport, getExpectedReportId } from "../lib/reports/generateReport.js";
 import { saveReport, loadReport, listReports } from "../lib/reports/archiveReport.js";
 
 function isAdmin(req) {
@@ -22,7 +22,6 @@ export default async function handler(req, res) {
 
     // ── Fetch a specific archived report by report_id or week_key ─────────
     if (week) {
-      // week can be "2026-W20" or a full report_id
       const reportId = week.startsWith("report-") ? week : `report-${period}-${week}`;
       const cached = await loadReport(reportId);
       if (!cached) return res.status(404).json({ error: `Report not found: ${reportId}` });
@@ -34,7 +33,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "period must be weekly, monthly, or quarterly" });
     }
 
-    const weekOffset = parseInt(offset || "0", 10) || 0;
+    const weekOffset   = parseInt(offset || "0", 10) || 0;
     const includeTiers = tiers ? tiers.split(",") : ["core", "adjacent"];
 
     // ── Force-refresh requires admin ──────────────────────────────────────
@@ -42,14 +41,19 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
+    // ── Cache-first: serve from archive if available ──────────────────────
+    if (refresh !== "1") {
+      const expectedId = getExpectedReportId(period, weekOffset);
+      const cached = await loadReport(expectedId);
+      if (cached) return res.status(200).json(cached);
+    }
+
     // ── Generate fresh report ─────────────────────────────────────────────
     const report = await generateReport({ period, weekOffset, includeTiers });
 
-    // Archive every generated report (upsert — safe to re-run)
     try {
       await saveReport(report);
     } catch (archiveErr) {
-      // Non-fatal: surface the warning but still return the report
       console.warn("Report archive failed:", archiveErr.message);
     }
 

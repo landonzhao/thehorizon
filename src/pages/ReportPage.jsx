@@ -16,6 +16,17 @@ function priorityClass(label) {
   return label === "critical" ? "critical" : label === "high" ? "high" : label === "medium" ? "medium" : "low";
 }
 
+function archiveBtnLabel(r) {
+  const wk = r.week_key || "";
+  if (/^\d{4}-W\d{1,2}$/.test(wk)) return wk.replace(/^\d{4}-/, "");   // "2026-W20" → "W20"
+  if (/^\d{4}-\d{2}$/.test(wk)) {
+    const [y, m] = wk.split("-");
+    return new Date(`${y}-${m}-01`).toLocaleDateString("en-SG", { month: "short", year: "2-digit" });
+  }
+  if (/^\d{4}-Q\d$/.test(wk)) return wk.replace(/^\d{4}-/, "");         // "2026-Q2" → "Q2"
+  return wk;
+}
+
 // ── Primitive UI pieces ───────────────────────────────────────────────────────
 
 function StatPill({ label, value, highlight, delta }) {
@@ -32,11 +43,12 @@ function StatPill({ label, value, highlight, delta }) {
   );
 }
 
-function SectionHeader({ title, count }) {
+function SectionHeader({ title, count, subtitle }) {
   return (
     <div className="report-section-head">
       <h2 className="report-section-title">{title}</h2>
       {count != null && <span className="section-count">{count}</span>}
+      {subtitle && <p className="section-subtitle-inline">{subtitle}</p>}
     </div>
   );
 }
@@ -61,9 +73,9 @@ function StrategicShifts({ shifts, comparison }) {
       {delta && (
         <div className="comparison-row">
           <span className="comp-label">Period vs prior:</span>
-          <span className={`comp-value ${delta.source_count.change >= 0 ? "up" : "down"}`}>
-            {delta.source_count.change >= 0 ? "+" : ""}{delta.source_count.change} sources
-            {delta.source_count.pct_change != null && ` (${delta.source_count.pct_change > 0 ? "+" : ""}${delta.source_count.pct_change}%)`}
+          <span className={`comp-value ${delta.source_count?.change >= 0 ? "up" : "down"}`}>
+            {delta.source_count?.change >= 0 ? "+" : ""}{delta.source_count?.change} sources
+            {delta.source_count?.pct_change != null && ` (${delta.source_count.pct_change > 0 ? "+" : ""}${delta.source_count.pct_change}%)`}
           </span>
           {delta.by_maturity?.emerging?.change > 0 && (
             <span className="comp-tag emerging">
@@ -84,6 +96,7 @@ function StrategicShifts({ shifts, comparison }) {
 // ── Top developments ──────────────────────────────────────────────────────────
 
 function DevelopmentCard({ item, rank }) {
+  const [showWatch, setShowWatch] = useState(false);
   const catLabel = CATEGORY_LABELS[item.category] || formatLabel(item.category || "");
   return (
     <article className="report-dev-card">
@@ -106,7 +119,17 @@ function DevelopmentCard({ item, rank }) {
           {item.tags?.slice(0, 3).map((t) => (
             <span key={t} className="tag-chip">{t.replaceAll("_", " ")}</span>
           ))}
+          {item.watch_points?.length > 0 && (
+            <button className="ghost-button xs" onClick={() => setShowWatch((s) => !s)}>
+              {showWatch ? "hide" : `${item.watch_points.length} watch points`}
+            </button>
+          )}
         </div>
+        {showWatch && item.watch_points?.length > 0 && (
+          <ul className="watch-points-list">
+            {item.watch_points.map((wp, i) => <li key={i}>{wp}</li>)}
+          </ul>
+        )}
       </div>
     </article>
   );
@@ -127,7 +150,7 @@ function SignalClusterCard({ cluster }) {
           <span className="cluster-count">{cluster.source_count} src</span>
           <span className="cluster-rel">rel {cluster.horizon_relevance}</span>
           {cluster.categories?.length > 1 && (
-            <span className="cluster-cats">{cluster.categories.length} categories</span>
+            <span className="cluster-cats">{cluster.categories.length} cats</span>
           )}
           <span className="cluster-chevron">{open ? "▲" : "▼"}</span>
         </div>
@@ -208,7 +231,7 @@ function TimelineSection({ timeline }) {
   const [showAll, setShowAll] = useState(false);
   if (!timeline?.events?.length) return null;
 
-  const events = showAll ? timeline.events : timeline.events.slice(-20);
+  const events = showAll ? timeline.events : timeline.events.slice(0, 20);
   let lastWeek = null;
 
   return (
@@ -258,7 +281,7 @@ function TimelineSection({ timeline }) {
       </div>
       {!showAll && timeline.event_count > 20 && (
         <button className="ghost-button sm" onClick={() => setShowAll(true)}>
-          Show {timeline.event_count - 20} earlier events
+          Show {timeline.event_count - 20} more events
         </button>
       )}
     </section>
@@ -317,7 +340,7 @@ function CategorySection({ section, signalClusters }) {
   );
 }
 
-// ── Chart bars (CSS-only, no Recharts dependency) ─────────────────────────────
+// ── Chart components (CSS-only, no Recharts) ──────────────────────────────────
 
 function BarChart({ data, valueKey = "count", labelKey = "label", maxValue }) {
   const max = maxValue || Math.max(...data.map((d) => d[valueKey] || 0), 1);
@@ -343,13 +366,43 @@ function BarChart({ data, valueKey = "count", labelKey = "label", maxValue }) {
 }
 
 function RadarGrid({ data }) {
+  const maxCount = Math.max(...data.map((d) => d.source_count || 0), 1);
   return (
     <div className="radar-grid">
       {data.map((d) => (
         <div key={d.category} className="radar-cell" style={{ "--fill": d.fill }}>
-          <div className="radar-bar" style={{ "--pct": `${Math.round((d.source_count / Math.max(...data.map(x => x.source_count), 1)) * 100)}%` }} />
+          <div className="radar-bar" style={{ "--pct": `${Math.round((d.source_count / maxCount) * 100)}%` }} />
           <span className="radar-label">{d.label}</span>
           <span className="radar-count">{d.source_count}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WeeklyActivityChart({ data }) {
+  if (!data?.length) return null;
+  const maxCount = Math.max(...data.map((d) => d.count || 0), 1);
+  return (
+    <div className="weekly-activity-chart">
+      {data.map((d) => (
+        <div key={d.week} className="wa-col">
+          <div className="wa-bar-wrap">
+            {d.emerging_count > 0 && (
+              <div
+                className="wa-bar emerging"
+                style={{ height: `${Math.round((d.emerging_count / maxCount) * 100)}%` }}
+                title={`${d.emerging_count} emerging`}
+              />
+            )}
+            <div
+              className="wa-bar base"
+              style={{ height: `${Math.round(((d.count - (d.emerging_count || 0)) / maxCount) * 100)}%` }}
+              title={`${d.count} total`}
+            />
+          </div>
+          <span className="wa-label">{d.label || d.week?.replace(/^\d{4}-/, "")}</span>
+          <span className="wa-count">{d.count}</span>
         </div>
       ))}
     </div>
@@ -364,12 +417,17 @@ function ChartSection({ chartData, stats }) {
       <div className="charts-grid">
         <div className="chart-panel">
           <p className="chart-title">Category Distribution</p>
-          <RadarGrid data={chartData.radar_chart} />
+          <RadarGrid data={chartData.radar_chart || []} />
         </div>
-        {chartData.sector_radar?.length > 0 && (
+        {chartData.weekly_activity?.length > 1 && (
           <div className="chart-panel">
-            <p className="chart-title">Sectors Affected</p>
-            <BarChart data={chartData.sector_radar} valueKey="count" labelKey="sector" />
+            <p className="chart-title">Activity by Week
+              <span className="chart-legend">
+                <span className="legend-dot emerging" /> emerging
+                <span className="legend-dot base" /> other
+              </span>
+            </p>
+            <WeeklyActivityChart data={chartData.weekly_activity} />
           </div>
         )}
         <div className="chart-panel">
@@ -380,11 +438,46 @@ function ChartSection({ chartData, stats }) {
               .map(([k, v]) => ({
                 label: k,
                 count: v,
-                fill: { emerging: "#f97316", growing: "#eab308", established: "#3b82f6", declining: "#6b7280" }[k] || "#e5e7eb",
+                fill: { emerging: "#f97316", growing: "#eab308", established: "#3b82f6", declining: "#6b7280", unknown: "#374151" }[k] || "#e5e7eb",
               }))}
             valueKey="count"
           />
         </div>
+        {chartData.sector_radar?.length > 0 && (
+          <div className="chart-panel">
+            <p className="chart-title">Sectors Affected</p>
+            <BarChart data={chartData.sector_radar} valueKey="count" labelKey="sector" />
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ── Sector alerts ─────────────────────────────────────────────────────────────
+
+function SectorAlertsSection({ alerts }) {
+  if (!alerts?.length) return null;
+  return (
+    <section className="report-section">
+      <SectionHeader title="Sector Impact" count={alerts.length} />
+      <p className="section-subtitle">Sectors most represented in this period's intelligence sources.</p>
+      <div className="sector-alerts-grid">
+        {alerts.slice(0, 8).map((a) => (
+          <div key={a.sector} className="sector-alert-card">
+            <div className="sector-alert-header">
+              <span className="sector-name">{a.sector}</span>
+              <span className="sector-count">{a.count} sources</span>
+            </div>
+            <div className="sector-sources">
+              {a.top_sources?.slice(0, 2).map((s) => (
+                <a key={s.url} href={s.url} target="_blank" rel="noreferrer" className="sector-source-link">
+                  {s.title}
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -408,7 +501,7 @@ function ArchiveNav({ period, currentWeekKey, onSelectWeek }) {
 
   return (
     <div className="archive-nav">
-      <span className="archive-nav-label">Past reports:</span>
+      <span className="archive-nav-label">Archive:</span>
       <div className="archive-nav-list">
         {archives.map((r) => (
           <button
@@ -417,7 +510,7 @@ function ArchiveNav({ period, currentWeekKey, onSelectWeek }) {
             onClick={() => onSelectWeek(r.week_key)}
             title={`${r.date_from} → ${r.date_to} · ${r.source_count} sources`}
           >
-            {r.week_key}
+            {archiveBtnLabel(r)}
             {!r.is_complete && <span className="live-dot" title="In progress" />}
           </button>
         ))}
@@ -430,7 +523,11 @@ function ArchiveNav({ period, currentWeekKey, onSelectWeek }) {
 
 function KeyEntitiesSection({ entities }) {
   if (!entities) return null;
-  const hasContent = entities.threat_actors?.length || entities.tools_and_techniques?.length || entities.cves?.length;
+  const hasContent =
+    entities.threat_actors?.length ||
+    entities.tools_and_techniques?.length ||
+    entities.cves?.length ||
+    entities.affected_products?.length;
   if (!hasContent) return null;
 
   return (
@@ -457,6 +554,16 @@ function KeyEntitiesSection({ entities }) {
             </div>
           </div>
         )}
+        {entities.affected_products?.length > 0 && (
+          <div className="entity-group">
+            <p className="eyebrow">Affected Products & Systems</p>
+            <div className="entity-tags">
+              {entities.affected_products.slice(0, 15).map((e) => (
+                <span key={e.name} className="entity-tag product">{e.name} ({e.count})</span>
+              ))}
+            </div>
+          </div>
+        )}
         {entities.cves?.length > 0 && (
           <div className="entity-group">
             <p className="eyebrow">CVEs</p>
@@ -476,7 +583,7 @@ function KeyEntitiesSection({ entities }) {
 
 export function ReportPage() {
   const [period, setPeriod] = useState("weekly");
-  const [selectedWeek, setSelectedWeek] = useState(null); // null = current
+  const [selectedWeek, setSelectedWeek] = useState(null);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -498,7 +605,6 @@ export function ReportPage() {
 
   useEffect(() => { loadReport(); }, [loadReport]);
 
-  // Reset selected week when period changes
   const handlePeriodChange = (p) => {
     setPeriod(p);
     setSelectedWeek(null);
@@ -528,7 +634,6 @@ export function ReportPage() {
         </div>
       </header>
 
-      {/* Archive navigator */}
       <div className="archive-bar">
         <ArchiveNav
           period={period}
@@ -540,7 +645,7 @@ export function ReportPage() {
       {loading && (
         <section className="panel loading-panel">
           <div className="loading-spinner" />
-          <p>Generating report…</p>
+          <p>Loading report…</p>
         </section>
       )}
       {error && (
@@ -555,15 +660,15 @@ export function ReportPage() {
           <section className="report-stats-row">
             <StatPill label="Total sources" value={stats.total_sources}
               delta={pc?.delta?.source_count?.change} />
-            <StatPill label="Core" value={stats.by_relevance_tier.core} highlight />
-            <StatPill label="Adjacent" value={stats.by_relevance_tier.adjacent} />
-            <StatPill label="Agentic AI" value={stats.by_category.agentic_ai_threats ?? 0}
+            <StatPill label="Core" value={stats.by_relevance_tier?.core} highlight />
+            <StatPill label="Adjacent" value={stats.by_relevance_tier?.adjacent} />
+            <StatPill label="Agentic AI" value={stats.by_category?.agentic_ai_threats ?? 0}
               delta={pc?.delta?.by_category?.agentic_ai_threats?.change} />
-            <StatPill label="LLM threats" value={stats.by_category.llm_threats ?? 0}
+            <StatPill label="LLM threats" value={stats.by_category?.llm_threats ?? 0}
               delta={pc?.delta?.by_category?.llm_threats?.change} />
-            <StatPill label="AI-enabled" value={stats.by_category.ai_enabled_threats ?? 0} />
-            <StatPill label="Traditional ML" value={stats.by_category.traditional_ai_threats ?? 0} />
-            {stats.threat_maturity.emerging > 0 && (
+            <StatPill label="AI-enabled" value={stats.by_category?.ai_enabled_threats ?? 0} />
+            <StatPill label="Traditional ML" value={stats.by_category?.traditional_ai_threats ?? 0} />
+            {stats.threat_maturity?.emerging > 0 && (
               <StatPill label="Emerging" value={stats.threat_maturity.emerging} highlight
                 delta={pc?.delta?.by_maturity?.emerging?.change} />
             )}
@@ -576,7 +681,10 @@ export function ReportPage() {
             comparison={report.period_comparison}
           />
 
-          {/* S2: Top developments */}
+          {/* S2: Data overview — charts */}
+          <ChartSection chartData={report.chart_data} stats={stats} />
+
+          {/* S3: Top developments */}
           {report.executive?.top_developments?.length > 0 && (
             <section className="report-section">
               <SectionHeader title="Top Developments" count={report.executive.top_developments.length} />
@@ -588,7 +696,7 @@ export function ReportPage() {
             </section>
           )}
 
-          {/* S3: Emerging threats */}
+          {/* S4: Emerging threats */}
           {report.executive?.emerging_threats?.length > 0 && (
             <section className="report-section">
               <SectionHeader title="Emerging & Growing Threats" count={report.executive.emerging_threats.length} />
@@ -600,10 +708,10 @@ export function ReportPage() {
             </section>
           )}
 
-          {/* S4: Signal clusters */}
+          {/* S5: Signal clusters */}
           <SignalClusters clusters={report.threat_landscape?.signal_clusters} />
 
-          {/* S5: Cross-category convergence */}
+          {/* S6: Cross-category convergence */}
           {report.threat_landscape?.convergences?.length > 0 && (
             <section className="report-section">
               <SectionHeader title="Cross-Category Convergence"
@@ -619,13 +727,13 @@ export function ReportPage() {
             </section>
           )}
 
-          {/* S6: Timeline */}
+          {/* S7: Timeline */}
           <TimelineSection timeline={report.timeline} />
 
-          {/* S7: Charts */}
-          <ChartSection chartData={report.chart_data} stats={stats} />
+          {/* S8: Sector impact */}
+          <SectorAlertsSection alerts={report.sector_alerts} />
 
-          {/* S8: Category breakdown */}
+          {/* S9: Category breakdown */}
           <section className="report-section">
             <SectionHeader title="Category Breakdown" />
             <div className="report-categories">
@@ -639,7 +747,7 @@ export function ReportPage() {
             </div>
           </section>
 
-          {/* S9: Key entities */}
+          {/* S10: Key entities */}
           <KeyEntitiesSection entities={report.key_entities} />
 
           {/* Footer */}

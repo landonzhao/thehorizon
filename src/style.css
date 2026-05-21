@@ -1293,6 +1293,124 @@ a:hover {
 .radar-label { font-size: 0.72rem; color: #94a3b8; }
 .radar-count { font-size: 0.72rem; color: #64748b; }
 
+/* ── Weekly activity chart ───────────────────────────────────────────────────── */
+.weekly-activity-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 120px;
+  padding-top: 8px;
+}
+.wa-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  gap: 4px;
+}
+.wa-bar-wrap {
+  display: flex;
+  flex-direction: column-reverse;
+  width: 100%;
+  flex: 1;
+  min-height: 4px;
+}
+.wa-bar {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.4s ease;
+}
+.wa-bar.emerging { background: #f97316; }
+.wa-bar.base     { background: #2563eb; opacity: 0.6; }
+.wa-label { font-size: 0.65rem; color: #475569; white-space: nowrap; }
+.wa-count { font-size: 0.65rem; color: #64748b; }
+.chart-legend { font-size: 0.7rem; font-weight: 400; color: #64748b; margin-left: 8px; text-transform: none; letter-spacing: 0; }
+.legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin: 0 3px 0 8px; vertical-align: middle; }
+.legend-dot.emerging { background: #f97316; }
+.legend-dot.base     { background: #2563eb; opacity: 0.6; }
+
+/* ── Sector alerts ───────────────────────────────────────────────────────────── */
+.sector-alerts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.sector-alert-card {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.sector-alert-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.sector-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  text-transform: capitalize;
+}
+.sector-count {
+  font-size: 0.75rem;
+  color: #3b82f6;
+  font-weight: 600;
+  background: rgba(59,130,246,0.1);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.sector-sources { display: flex; flex-direction: column; gap: 5px; }
+.sector-source-link {
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sector-source-link:hover { color: #93c5fd; }
+
+/* ── Watch points ────────────────────────────────────────────────────────────── */
+.watch-points-list {
+  margin: 10px 0 0;
+  padding: 10px 14px;
+  background: #0f172a;
+  border-left: 2px solid #1d4ed8;
+  border-radius: 0 8px 8px 0;
+  list-style: disc;
+  list-style-position: inside;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.watch-points-list li {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+.ghost-button.xs {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+}
+
+/* ── Affected products entity tag ────────────────────────────────────────────── */
+.entity-tag.product {
+  background: rgba(168,85,247,0.1);
+  color: #c084fc;
+  border: 1px solid rgba(168,85,247,0.2);
+}
+
+/* ── Section subtitle inline ─────────────────────────────────────────────────── */
+.section-subtitle-inline {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0;
+  flex-basis: 100%;
+}
+
 /* ── Tag chip ────────────────────────────────────────────────────────────────── */
 .tag-chip {
   font-size: 0.72rem;
@@ -1313,4 +1431,6 @@ a:hover {
   .conv-header        { flex-direction: column; gap: 8px; }
   .bar-row            { grid-template-columns: 80px 1fr 28px; }
   .cluster-meta       { flex-wrap: wrap; gap: 5px; }
+  .sector-alerts-grid { grid-template-columns: 1fr 1fr; }
+  .weekly-activity-chart { height: 80px; }
 }
