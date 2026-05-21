@@ -121,7 +121,7 @@ for (let i = 0; i < chunks.length; i++) {
 
     // Pause between chunks to respect API rate limits (arXiv in particular)
     if (i < chunks.length - 1) {
-      await new Promise((r) => setTimeout(r, 8000));
+      await new Promise((r) => setTimeout(r, 20000));
     }
   } catch (err) {
     errors++;
