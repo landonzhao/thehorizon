@@ -177,25 +177,124 @@ function DonutChart({ data }) {
   );
 }
 
-// ── Weekly activity chart ─────────────────────────────────────────────────────
+// ── Weekly activity line graph (SVG) ──────────────────────────────────────────
 
 function WeeklyActivityChart({ data }) {
+  const [hovIdx, setHovIdx] = useState(null);
   if (!data?.length) return null;
-  const max = Math.max(...data.map((d) => d.count || 0), 1);
+
+  const W = 480, H = 140;
+  const PAD = { top: 14, right: 14, bottom: 30, left: 30 };
+  const pw = W - PAD.left - PAD.right;
+  const ph = H - PAD.top - PAD.bottom;
+
+  const maxVal = Math.max(...data.map((d) => d.count || 0), 1);
+  const n = data.length;
+  const xi = (i) => PAD.left + (n < 2 ? pw / 2 : (i / (n - 1)) * pw);
+  const yi = (v) => PAD.top + ph - (v / maxVal) * ph;
+
+  const linePts = data.map((d, i) => `${xi(i).toFixed(1)},${yi(d.count || 0).toFixed(1)}`).join(" ");
+  const hasEmerging = data.some((d) => d.emerging_count > 0);
+  const emPts = hasEmerging
+    ? data.map((d, i) => `${xi(i).toFixed(1)},${yi(d.emerging_count || 0).toFixed(1)}`).join(" ")
+    : null;
+
+  const areaD = [
+    `M ${xi(0).toFixed(1)},${(PAD.top + ph).toFixed(1)}`,
+    ...data.map((d, i) => `L ${xi(i).toFixed(1)},${yi(d.count || 0).toFixed(1)}`),
+    `L ${xi(n - 1).toFixed(1)},${(PAD.top + ph).toFixed(1)} Z`,
+  ].join(" ");
+
+  const yTicks = [0, 0.5, 1].map((pct) => ({ y: PAD.top + ph - pct * ph, val: Math.round(pct * maxVal) }));
+
   return (
-    <div className="weekly-activity-chart">
-      {data.map((d) => (
-        <div key={d.week} className="wa-col" title={`${d.week}: ${d.count} sources, ${d.emerging_count} emerging`}>
-          <div className="wa-bar-wrap">
-            {d.emerging_count > 0 && (
-              <div className="wa-bar emerging" style={{ height: `${Math.round((d.emerging_count / max) * 100)}%` }} />
-            )}
-            <div className="wa-bar base" style={{ height: `${Math.round(((d.count - (d.emerging_count || 0)) / max) * 100)}%` }} />
-          </div>
-          <span className="wa-label">{d.label || d.week?.replace(/^\d{4}-/, "")}</span>
-          <span className="wa-count">{d.count}</span>
-        </div>
-      ))}
+    <div className="weekly-line-wrap">
+      <svg viewBox={`0 0 ${W} ${H}`} className="weekly-line-svg">
+        <defs>
+          <linearGradient id="wlGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines */}
+        {yTicks.map((t) => (
+          <g key={t.val}>
+            <line x1={PAD.left} y1={t.y} x2={W - PAD.right} y2={t.y}
+              stroke="#1e293b" strokeWidth="1" />
+            <text x={PAD.left - 4} y={t.y + 3} textAnchor="end"
+              fontSize="7.5" fill="#475569">{t.val}</text>
+          </g>
+        ))}
+
+        {/* Area fill under total line */}
+        <path d={areaD} fill="url(#wlGrad)" />
+
+        {/* Emerging dashed line */}
+        {emPts && (
+          <polyline points={emPts} fill="none"
+            stroke="#f97316" strokeWidth="1.5" strokeDasharray="4 3"
+            strokeLinecap="round" strokeLinejoin="round" />
+        )}
+
+        {/* Total line */}
+        <polyline points={linePts} fill="none"
+          stroke="#3b82f6" strokeWidth="2"
+          strokeLinecap="round" strokeLinejoin="round" />
+
+        {/* Per-point interactions, dots, labels */}
+        {data.map((d, i) => {
+          const x = xi(i), y = yi(d.count || 0);
+          const isHov = hovIdx === i;
+          const ttW = 84, ttH = d.emerging_count > 0 ? 32 : 20;
+          const ttX = Math.max(PAD.left, Math.min(x - ttW / 2, W - PAD.right - ttW));
+          const ttY = Math.max(PAD.top + 2, y - ttH - 6);
+
+          return (
+            <g key={d.week}
+              onMouseEnter={() => setHovIdx(i)}
+              onMouseLeave={() => setHovIdx(null)}>
+              {/* Wide invisible hover zone */}
+              <rect x={x - 10} y={PAD.top} width={20} height={ph}
+                fill="transparent" style={{ cursor: "crosshair" }} />
+              {/* Vertical cursor line */}
+              {isHov && (
+                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + ph}
+                  stroke="#334155" strokeWidth="1" strokeDasharray="3 2" />
+              )}
+              {/* Total dot */}
+              <circle cx={x} cy={y} r={isHov ? 4.5 : 2.5}
+                fill="#3b82f6" stroke="#0f172a" strokeWidth={isHov ? 1.5 : 1} />
+              {/* Emerging dot */}
+              {d.emerging_count > 0 && (
+                <circle cx={x} cy={yi(d.emerging_count)} r={2}
+                  fill="#f97316" stroke="#0f172a" strokeWidth="1" />
+              )}
+              {/* X-axis label */}
+              <text x={x} y={H - 4} textAnchor="middle" fontSize="7.5" fill="#475569">
+                {d.label || d.week?.replace(/^\d{4}-/, "")}
+              </text>
+              {/* Tooltip */}
+              {isHov && (
+                <g>
+                  <rect x={ttX} y={ttY} width={ttW} height={ttH}
+                    rx="3" fill="#1e293b" stroke="#334155" strokeWidth="0.5" />
+                  <text x={ttX + ttW / 2} y={ttY + 13} textAnchor="middle"
+                    fontSize="9" fontWeight="700" fill="#f1f5f9">
+                    {d.count} sources
+                  </text>
+                  {d.emerging_count > 0 && (
+                    <text x={ttX + ttW / 2} y={ttY + 25} textAnchor="middle"
+                      fontSize="8" fill="#f97316">
+                      {d.emerging_count} emerging
+                    </text>
+                  )}
+                </g>
+              )}
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 }
@@ -369,14 +468,14 @@ function ChartSection({ chartData, stats }) {
           <DonutChart data={chartData.category_pie} />
         </div>
 
-        {/* Weekly activity */}
+        {/* Activity over time */}
         {chartData.weekly_activity?.length > 1 && (
           <div className="chart-panel">
             <p className="chart-title">
-              Weekly Activity
+              Activity Over Time
               <span className="chart-legend">
-                <span className="legend-dot emerging" /> emerging
-                <span className="legend-dot base" /> other
+                <span className="legend-dot" style={{ background: "#3b82f6" }} /> total
+                <span className="legend-dot" style={{ background: "#f97316" }} /> emerging
               </span>
             </p>
             <WeeklyActivityChart data={chartData.weekly_activity} />
