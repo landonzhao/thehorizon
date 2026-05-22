@@ -33,3 +33,12 @@ export const CATEGORY_DESCRIPTIONS = {
 };
 
 export const REPORT_PERIOD_DAYS = { weekly: 7, monthly: 30, quarterly: 91 };
+
+export const CAT_COLOURS = {
+  agentic_ai_threats:     "#f97316",
+  llm_threats:            "#ef4444",
+  ai_enabled_threats:     "#a855f7",
+  traditional_ai_threats: "#3b82f6",
+  ai_for_security:        "#22c55e",
+  uncategorised:          "#6b7280",
+};

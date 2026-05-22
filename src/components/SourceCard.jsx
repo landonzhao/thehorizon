@@ -14,30 +14,54 @@ export function TagList({ tags = [] }) {
 }
 
 export function SourceCard({ source, featured = false }) {
-  const credibility = getCredibilityLabel(source);
-  const text = source.short_summary || source.summary || source.full_text || "";
-  const priorityScore = source.priority_score ?? "—";
-  const priorityLabel = source.priority_label || "unscored";
+  const credibility    = getCredibilityLabel(source);
+  const priorityLabel  = source.priority_label || "unscored";
+  const priorityScore  = source.priority_score ?? "—";
+  const relevanceTier  = source.relevance_tier;
+  const aiScore        = typeof source.ai_specificity_score === "number"
+    ? source.ai_specificity_score
+    : null;
+
+  // Best available preview text: prefer analyst brief, then short summary, then raw text
+  const previewText =
+    source.analyst_brief?.what_happened ||
+    source.short_summary ||
+    source.summary ||
+    source.full_text ||
+    "";
+  const maxLen = featured ? 600 : 380;
 
   return (
-    <article className={`source-card ${featured ? "featured-card" : ""}`}>
+    <article className={`source-card${featured ? " featured-card" : ""}`}>
       <div className="source-card-top">
         <span className="source-type">{formatLabel(source.source_type)}</span>
-        <span className={`priority-pill ${priorityLabel}`}>
-          {formatLabel(priorityLabel)} · {priorityScore}
-        </span>
+        <div className="card-badges">
+          {relevanceTier && relevanceTier !== "context" && (
+            <span className={`relevance-tier ${relevanceTier}`}>{relevanceTier}</span>
+          )}
+          <span className={`priority-pill ${priorityLabel}`}>
+            {formatLabel(priorityLabel)} · {priorityScore}
+          </span>
+        </div>
       </div>
 
       <h3>{source.title}</h3>
 
       <p className="meta">
         {source.publisher || "Unknown publisher"} · {formatDate(source.date_published)}
+        {aiScore !== null && (
+          <span className="ai-score-badge" title="AI specificity score (0–100)">
+            AI {aiScore}
+          </span>
+        )}
       </p>
 
-      {source.priority_reason && <p className="reason">{source.priority_reason}</p>}
+      {source.priority_reason && (
+        <p className="reason">{source.priority_reason}</p>
+      )}
 
       <p className="summary">
-        {text ? text.slice(0, featured ? 620 : 420) : "No summary available."}
+        {previewText ? previewText.slice(0, maxLen) : "No summary available."}
       </p>
 
       <TagList tags={source.tags || []} />

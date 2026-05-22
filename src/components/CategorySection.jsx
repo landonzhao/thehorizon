@@ -1,10 +1,10 @@
 import { SourceCard } from "./SourceCard.jsx";
-import { CATEGORY_LABELS, CATEGORY_DESCRIPTIONS } from "../constants.js";
+import { CATEGORY_LABELS, CATEGORY_DESCRIPTIONS, CAT_COLOURS } from "../constants.js";
 
 function FeaturedTopThree({ sources }) {
-  const topSources = sources.slice(0, 3);
+  const top = sources.slice(0, 3);
 
-  if (topSources.length === 0) {
+  if (top.length === 0) {
     return (
       <div className="empty-category">
         <p>No sources in this category for this period.</p>
@@ -12,19 +12,19 @@ function FeaturedTopThree({ sources }) {
     );
   }
 
-  if (topSources.length === 1) {
+  if (top.length === 1) {
     return (
       <div className="featured-layout one">
-        <SourceCard source={topSources[0]} featured />
+        <SourceCard source={top[0]} featured />
       </div>
     );
   }
 
-  if (topSources.length === 2) {
+  if (top.length === 2) {
     return (
       <div className="featured-layout two">
-        <SourceCard source={topSources[0]} featured />
-        <SourceCard source={topSources[1]} featured />
+        <SourceCard source={top[0]} featured />
+        <SourceCard source={top[1]} featured />
       </div>
     );
   }
@@ -32,11 +32,11 @@ function FeaturedTopThree({ sources }) {
   return (
     <div className="featured-layout three">
       <div className="featured-top">
-        <SourceCard source={topSources[0]} featured />
+        <SourceCard source={top[0]} featured />
       </div>
       <div className="featured-bottom">
-        <SourceCard source={topSources[1]} />
-        <SourceCard source={topSources[2]} />
+        <SourceCard source={top[1]} />
+        <SourceCard source={top[2]} />
       </div>
     </div>
   );
@@ -44,9 +44,10 @@ function FeaturedTopThree({ sources }) {
 
 export function CategorySection({ category, sources, onViewAll }) {
   const remaining = Math.max(0, sources.length - 3);
+  const accent = CAT_COLOURS[category] || "#334155";
 
   return (
-    <section className="category-panel">
+    <section className="category-panel" style={{ borderTop: `3px solid ${accent}` }}>
       <div className="category-header">
         <div>
           <p className="eyebrow">Category</p>
@@ -59,9 +60,11 @@ export function CategorySection({ category, sources, onViewAll }) {
             <strong>{sources.length}</strong>
             <span>sources</span>
           </div>
-          <button className="ghost-button" onClick={() => onViewAll(category)}>
-            View all
-          </button>
+          {sources.length > 0 && (
+            <button className="ghost-button" onClick={() => onViewAll(category)}>
+              View all
+            </button>
+          )}
         </div>
       </div>
 
@@ -69,8 +72,10 @@ export function CategorySection({ category, sources, onViewAll }) {
 
       {remaining > 0 && (
         <p className="archive-note">
-          Showing top 3 by priority. {remaining} more source
-          {remaining === 1 ? "" : "s"} available in this category.
+          Showing top 3 by priority — {remaining} more source{remaining === 1 ? "" : "s"} available.{" "}
+          <button className="inline-link" onClick={() => onViewAll(category)}>
+            View all →
+          </button>
         </p>
       )}
     </section>
@@ -78,17 +83,25 @@ export function CategorySection({ category, sources, onViewAll }) {
 }
 
 export function CategoryDetail({ category, sources, onBack }) {
+  const accent = CAT_COLOURS[category] || "#334155";
+
   return (
-    <section className="category-panel">
+    <section className="category-panel" style={{ borderTop: `3px solid ${accent}` }}>
       <div className="category-header">
         <div>
           <p className="eyebrow">Category Detail</p>
           <h2>{CATEGORY_LABELS[category]}</h2>
           <p>{CATEGORY_DESCRIPTIONS[category]}</p>
         </div>
-        <button className="ghost-button" onClick={onBack}>
-          ← Back to overview
-        </button>
+        <div className="category-actions">
+          <div className="category-count">
+            <strong>{sources.length}</strong>
+            <span>sources</span>
+          </div>
+          <button className="ghost-button" onClick={onBack}>
+            ← Back
+          </button>
+        </div>
       </div>
 
       {sources.length === 0 ? (
