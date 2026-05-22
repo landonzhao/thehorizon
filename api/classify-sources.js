@@ -14,6 +14,7 @@ export default async function handler(req, res) {
       start: req.query.start,
       end: req.query.end,
       limit: Number(req.query.limit || 1000),
+      testSet: req.query.test_set === "true",
     });
 
     return res.status(200).json({

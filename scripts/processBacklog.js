@@ -36,13 +36,15 @@ import "dotenv/config";
 import { supabase } from "../lib/storage/supabaseClient.js";
 import { enrichSource } from "../lib/claims/enrichSource.js";
 import { classifyStoredSources } from "../lib/classification/classifyStoredSources.js";
+import { deriveCategory } from "../lib/classification/deriveCategory.js";
+import { ALLOWED_TAGS } from "../lib/classification/allowedTags.js";
 import { scoreSource } from "../lib/scoring/scoreSource.js";
 
 const batchSize = parseInt(process.argv[2] || "20");
 const delayMs   = parseInt(process.argv[3] || "20000");
 const mode      = process.argv[4] || "full";
 
-const CLASSIFY_VERSION   = "classify-v2.0";
+const CLASSIFY_VERSION   = "classify-v5.0";
 const TIER_CORE          = 40;
 const TIER_ADJACENT      = 20;
 const DELETE_THRESHOLD   = 10;
@@ -120,7 +122,8 @@ async function enrichBatch(sources) {
       const ai_specificity_score = cl.ai_specificity_score ?? 0;
 
       // Delete genuinely off-topic, but never curated sources
-      if (source.trust_tier !== "curated" && ai_specificity_score < DELETE_THRESHOLD) {
+      const isCurated = source.trust_tier === "curated" || (source.tags || []).includes("curated");
+      if (!isCurated && ai_specificity_score < DELETE_THRESHOLD) {
         await supabase.from("sources").delete().eq("id", source.id);
         console.log(` deleted (score=${ai_specificity_score})`);
         deleted++;
@@ -129,7 +132,7 @@ async function enrichBatch(sources) {
       }
 
       const relevance_tier =
-        source.trust_tier === "curated"
+        isCurated
           ? (source.relevance_tier || "core")
           : ai_specificity_score >= TIER_CORE
             ? "core"
@@ -137,11 +140,14 @@ async function enrichBatch(sources) {
               ? "adjacent"
               : "context";
 
+      const tags = ((cl.tags?.length ? cl.tags : source.tags) || []).filter((t) => ALLOWED_TAGS.includes(t));
+      const { main_category, category_confidence, category_reason } = deriveCategory(tags);
+
       const update = {
-        tags: cl.tags?.length ? cl.tags : source.tags,
-        main_category: cl.main_category || source.main_category || "uncategorised",
-        category_confidence: cl.category_confidence,
-        category_reason: cl.category_reason,
+        tags,
+        main_category,
+        category_confidence,
+        category_reason,
         ai_specificity_score,
         ai_specificity_reason: cl.ai_specificity_reason,
         relevance_tier,
@@ -216,7 +222,7 @@ const NOW = new Date().toISOString().slice(0, 16).replace("T", " ");
 console.log(`\n${"═".repeat(65)}`);
 console.log(` Horizon Backlog Processor  ${NOW}`);
 console.log(` Mode: ${mode}  |  Batch: ${batchSize}  |  Delay: ${delayMs}ms`);
-console.log(` Providers: ${["OPENAI_API_KEY","GROQ_API_KEY","GEMINI_API_KEY"].filter(k => process.env[k]).map(k => k.replace("_API_KEY","")).join(" → ") || "none"}`);
+console.log(` Providers: ${["OPENAI_API_KEY","OPENAI_API_KEY_2","GROQ_API_KEY","GEMINI_API_KEY","GEMINI_API_KEY_2"].filter(k => process.env[k]).map(k => k.replace("_API_KEY","")).join(" → ") || "none"}`);
 console.log(`${"═".repeat(65)}\n`);
 
 // ── Phase 1: Classify ─────────────────────────────────────────────────────────
@@ -261,7 +267,7 @@ if (mode !== "classify-only") {
       // If all errors and no enrichment, providers are all quota-limited — stop
       if (errors === sources.length && enriched === 0) {
         console.log("\n  All providers exhausted or quota-limited. Stopping enrichment.");
-        console.log("  Add GROQ_API_KEY or wait for quotas to reset, then re-run.");
+        console.log("  All providers quota-exhausted. Add more keys or wait for quotas to reset, then re-run.");
         break;
       }
     }
@@ -291,8 +297,8 @@ console.log(` Backlog processor complete.`);
 console.log(`   Total enriched : ${enrichedTotal}`);
 console.log(`   Still pending  : ${pendingFinal}`);
 if (pendingFinal > 0) {
-  const groqKey = !!process.env.GROQ_API_KEY;
-  const tip = groqKey
+  const hasGroq = !!process.env.GROQ_API_KEY;
+  const tip = hasGroq
     ? `node scripts/processBacklog.js ${batchSize} 20000   # Groq free (20s delay)`
     : `Add GROQ_API_KEY to .env (free at console.groq.com), then:\n   node scripts/processBacklog.js ${batchSize} 20000`;
   console.log(`\n   To finish: ${tip}`);

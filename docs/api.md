@@ -31,13 +31,13 @@ Query params:
 - limit (default 1000): max sources to process per call
 - start, end: optional date filters on date_published
 
-Reads sources from Supabase, runs LLM enrichment (via enrichSource — OpenAI primary, Gemini fallback) on sources where claim_extraction_status is null and an API key is present, falls back to rule-based classification otherwise. Deletes sources with ai_specificity_score < 10 (except curated). Updates all surviving sources with tags, main_category, ai_specificity_score, relevance_tier, and optionally intelligence/summary fields.
+Reads unclassified sources (`tag_version IS NULL`) from Supabase. For each source, calls `enrichSource` (provider rotation: OpenAI `gpt-4o-mini` → Groq `llama-3.3-70b-versatile` → Gemini `gemini-2.0-flash` → Gemini `gemini-2.5-flash`) to assign tags and `ai_specificity_score`. `main_category` is then derived deterministically from the tags via `deriveCategory`. Deletes sources with `ai_specificity_score < 10` (except curated). Classification is LLM-only — there is no rule-based fallback.
 
-Each source is processed in an isolated try/catch. A failure on one source is logged and counted in error_count; it does not abort the remaining batch.
+Each source is processed in an isolated try/catch. A failure on one source is logged and counted in `error_count`; it does not abort the remaining batch.
 
 Must be run 2-3 times after a large backfill to cover all sources, since the limit applies per call.
 
-Returns: count, deleted_count, error_count, llm_count, rule_count, tier_counts (core/adjacent/context), sources, deleted, errors.
+Returns: `count`, `deleted_count`, `skipped_count`, `error_count`, `tier_counts` (core/adjacent/context), `sources`, `deleted`, `errors`.
 
 
 ### POST /api/score-sources

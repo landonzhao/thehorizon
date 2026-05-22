@@ -10,7 +10,6 @@ const CAT_COLOURS = {
   llm_threats:            "#ef4444",
   ai_enabled_threats:     "#a855f7",
   traditional_ai_threats: "#3b82f6",
-  ai_for_security:        "#22c55e",
   uncategorised:          "#6b7280",
 };
 
@@ -21,21 +20,19 @@ const MATURITY_COLOURS = {
   declining:   "#6b7280",
 };
 
-// Pentagon node positions for the convergence graph
+// Diamond node positions for the convergence graph (4 categories)
 // Center (200,175), radius 125
 const GRAPH_POS = {
-  agentic_ai_threats:     { x: 200, y: 50  },  // top
-  llm_threats:            { x: 319, y: 136 },  // top-right
-  ai_enabled_threats:     { x: 275, y: 278 },  // bottom-right
-  traditional_ai_threats: { x: 125, y: 278 },  // bottom-left
-  ai_for_security:        { x:  81, y: 136 },  // top-left
+  agentic_ai_threats:     { x: 200, y:  50 },  // top
+  llm_threats:            { x: 325, y: 175 },  // right
+  traditional_ai_threats: { x: 200, y: 300 },  // bottom
+  ai_enabled_threats:     { x:  75, y: 175 },  // left
 };
 const GRAPH_LINES = {
   agentic_ai_threats:     ["Agentic", "AI"],
   llm_threats:            ["LLM", "Threats"],
   ai_enabled_threats:     ["AI-Enabled", "Attacks"],
   traditional_ai_threats: ["Traditional", "ML"],
-  ai_for_security:        ["AI", "Defence"],
 };
 
 // ── Utility helpers ────────────────────────────────────────────────────────────

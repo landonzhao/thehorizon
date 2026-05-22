@@ -17,35 +17,42 @@
 import "dotenv/config";
 import { supabase } from "../lib/storage/supabaseClient.js";
 import { enrichSource } from "../lib/claims/enrichSource.js";
-import { classifySourceWithRules } from "../lib/classification/ruleBasedClassifier.js";
+import { deriveCategory } from "../lib/classification/deriveCategory.js";
 import { ALLOWED_TAGS } from "../lib/classification/allowedTags.js";
 
-const CLASSIFICATION_VERSION = "classify-v2.0";
+const CLASSIFICATION_VERSION = "classify-v5.0";
 const TIER_CORE = 40;
 const TIER_ADJACENT = 20;
 const DELETE_THRESHOLD = 10;
 
-const limitArg = parseInt(process.argv[2] || "9999");
-const delayMs  = parseInt(process.argv[3] || "7000");
+const limitArg  = parseInt(process.argv[2] || "9999");
+const delayMs   = parseInt(process.argv[3] || "7000");
+const testSetOnly = process.argv.includes("--test-set");
 
 function pad(n, w = 4) { return String(n).padStart(w, " "); }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
-  console.error("Neither OPENAI_API_KEY nor GEMINI_API_KEY is set — aborting.");
+const hasAnyKey = process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_2
+  || process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_2 || process.env.GROQ_API_KEY;
+if (!hasAnyKey) {
+  console.error("No LLM API keys set (OPENAI_API_KEY, OPENAI_API_KEY_2, GEMINI_API_KEY, GEMINI_API_KEY_2, GROQ_API_KEY) — aborting.");
   process.exit(1);
 }
 
-const provider = process.env.OPENAI_API_KEY ? "OpenAI" : "Gemini";
+const provider = process.env.OPENAI_API_KEY ? "OpenAI" : process.env.OPENAI_API_KEY_2 ? "OpenAI-2" : process.env.GROQ_API_KEY ? "Groq" : "Gemini";
 
-// Fetch sources without Gemini enrichment
-const { data: sources, error } = await supabase
+// Fetch sources without LLM enrichment, optionally scoped to the test set.
+let fetchQuery = supabase
   .from("sources")
   .select("*")
   .is("claim_extraction_status", null)
   .order("date_published", { ascending: false })
   .limit(limitArg);
+
+if (testSetOnly) fetchQuery = fetchQuery.eq("in_test_set", true);
+
+const { data: sources, error } = await fetchQuery;
 
 if (error) { console.error("DB fetch error:", error.message); process.exit(1); }
 
@@ -53,7 +60,7 @@ const total = sources?.length || 0;
 const etaMinutes = Math.ceil((total * delayMs) / 60000);
 
 console.log(`\n${"═".repeat(60)}`);
-console.log(` LLM Enrichment Run (${provider})`);
+console.log(` LLM Enrichment Run (${provider})${testSetOnly ? " [TEST SET]" : ""}`);
 console.log(` Sources to enrich : ${total}`);
 console.log(` Delay between calls: ${delayMs}ms`);
 console.log(` Estimated time    : ~${etaMinutes} min`);
@@ -75,8 +82,9 @@ for (let i = 0; i < total; i++) {
 
     const ai_specificity_score = cl.ai_specificity_score ?? 0;
 
-    // Hard-delete truly off-topic (respects curated bypass)
-    if (source.trust_tier !== "curated" && ai_specificity_score < DELETE_THRESHOLD) {
+    // Hard-delete truly off-topic (protect sources marked curated by tier or tag)
+    const isCurated = source.trust_tier === "curated" || (source.tags || []).includes("curated");
+    if (!isCurated && ai_specificity_score < DELETE_THRESHOLD) {
       await supabase.from("sources").delete().eq("id", source.id);
       console.log(`DELETED (score=${ai_specificity_score})`);
       errors++;
@@ -84,7 +92,7 @@ for (let i = 0; i < total; i++) {
     }
 
     const relevance_tier =
-      source.trust_tier === "curated"
+      isCurated
         ? (source.relevance_tier || "core")
         : ai_specificity_score >= TIER_CORE
           ? "core"
@@ -92,11 +100,14 @@ for (let i = 0; i < total; i++) {
             ? "adjacent"
             : "context";
 
+    const tags = (cl.tags || []).filter((t) => ALLOWED_TAGS.includes(t));
+    const { main_category, category_confidence, category_reason } = deriveCategory(tags);
+
     const update = {
-      tags: cl.tags,
-      main_category: cl.main_category || source.main_category || "uncategorised",
-      category_confidence: cl.category_confidence,
-      category_reason: cl.category_reason,
+      tags,
+      main_category,
+      category_confidence,
+      category_reason,
       ai_specificity_score,
       ai_specificity_reason: cl.ai_specificity_reason,
       relevance_tier,

@@ -3,7 +3,6 @@ export const MAIN_CATEGORY_ORDER = [
   "llm_threats",
   "agentic_ai_threats",
   "ai_enabled_threats",
-  "ai_for_security",
 ];
 
 export const ARCHIVE_CATEGORY_ORDER = [...MAIN_CATEGORY_ORDER, "uncategorised"];
@@ -13,7 +12,6 @@ export const CATEGORY_LABELS = {
   llm_threats: "LLM Threats",
   agentic_ai_threats: "Agentic AI Threats",
   ai_enabled_threats: "AI-Enabled Threats",
-  ai_for_security: "AI for Security",
   uncategorised: "Needs Review",
 };
 
@@ -25,9 +23,7 @@ export const CATEGORY_DESCRIPTIONS = {
   agentic_ai_threats:
     "Risks from AI agents, tool use, MCP, coding agents, and autonomous workflows.",
   ai_enabled_threats:
-    "AI-assisted scams, phishing, malware, deepfakes, disinformation, and fraud.",
-  ai_for_security:
-    "Defensive AI for detection, SOC operations, threat intelligence, and secure development.",
+    "AI as a weapon: deepfakes, AI phishing, AI malware, voice cloning, and disinformation.",
   uncategorised:
     "Sources that need review or do not yet fit cleanly into one category.",
 };
@@ -39,6 +35,5 @@ export const CAT_COLOURS = {
   llm_threats:            "#ef4444",
   ai_enabled_threats:     "#a855f7",
   traditional_ai_threats: "#3b82f6",
-  ai_for_security:        "#22c55e",
   uncategorised:          "#6b7280",
 };

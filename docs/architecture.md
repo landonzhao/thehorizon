@@ -47,7 +47,7 @@ Raw Internet Sources
 [7] Snapshot Persistence — Supabase upsert + Vercel Blob JSON archive
         │
         ▼
-[8] Classification — LLM enrichment (OpenAI/Gemini) or rule-based fallback
+[8] Classification — LLM taxonomy (tags + AI score) → deterministic tag-to-category
         │  Produces: tags, main_category, ai_specificity_score, relevance_tier,
         │  short_summary, analyst_brief, intelligence (trend_signals, key_entities,
         │  threat_maturity, sector_impact, horizon_relevance, report_tier)
@@ -116,13 +116,13 @@ Published Report (stored in Supabase `reports` table + Vercel Blob)
 
 ### Stage 8: Classification
 - Entry: `lib/classification/classifyStoredSources.js`, called by `api/classify-sources.js`
-- LLM path: `lib/claims/enrichSource.js` — OpenAI first (gpt-4o-mini), Gemini fallback (gemini-2.5-flash)
-- Rule-based fallback: `lib/classification/ruleBasedClassifier.js` with PHRASE_RULES
-- Produces: tags, main_category, ai_specificity_score, relevance_tier (core/adjacent/context)
+- LLM taxonomy: `lib/claims/enrichSource.js` — provider rotation: `gpt-4o-mini` (OPENAI_API_KEY) → `llama-3.3-70b-versatile` (GROQ_API_KEY) → `gemini-2.0-flash` → `gemini-2.5-flash` (GEMINI_API_KEY)
+- LLM assigns: tags (from ALLOWED_TAGS) + ai_specificity_score. Does NOT assign main_category.
+- Category derivation: `lib/classification/deriveCategory.js` — counts threat tags per category, picks the dominant one. Ties broken by severity rank. Deterministic, no LLM.
+- Also writes (via LLM): short_summary, analyst_brief, intelligence (jsonb), claims
 - Hard-deletes sources with ai_specificity_score < 10 (except curated)
-- LLM enrichment also writes: short_summary, analyst_brief, intelligence (jsonb)
 - Each source processed in isolated try/catch — one failure is logged, does not abort the batch
-- 7s rate-limit delay applied only when Gemini is the active provider; OpenAI calls have no delay
+- 2.5s inter-call delay (keeps within Groq's 30 RPM free-tier limit)
 
 ### Stage 9: Scoring
 - Entry: `lib/scoring/scoreSource.js`, `lib/scoring/scoreStoredSources.js`
@@ -241,8 +241,7 @@ Step 3 — LLM synthesis (single call):
 | Key Numbers | statistics + WoW/MoM deltas | 150 (mostly structured, light prose) |
 | Top Incidents | top 5 by report_score with analyst_brief | 400 |
 | Top Developments | top 5 research/advisory by report_score | 400 |
-| Category Analysis | category_breakdown for each of 5 categories | 200 per category |
-| AI for Security | ai_for_security category sources | 250 |
+| Category Analysis | category_breakdown for each of 4 categories | 200 per category |
 | Singapore Relevance | sources with singapore_relevance_score > 0 | 200 |
 | Trend Comparison | analytics WoW/MoM data + tag velocity | 300 |
 | Critical Takeaways | top horizon signals + critical/high priority sources | 300 |

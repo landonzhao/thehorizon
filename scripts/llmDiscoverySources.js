@@ -35,7 +35,7 @@ const rawSources = await fetchLlmDiscoverySources({});
 console.log(`  Raw discovered: ${rawSources.length} sources\n`);
 
 if (rawSources.length === 0) {
-  console.log("No sources discovered. Check GEMINI_API_KEY and Gemini quota.");
+  console.log("No sources discovered. Check GEMINI_API_KEY / GEMINI_API_KEY_2 and Gemini quota.");
   process.exit(0);
 }
 
@@ -46,7 +46,7 @@ console.log("Phase 2: Running pipeline (clean → dedup → filter → validate 
 const cleaned = cleanSources(rawSources);
 const deduped = dedupeSources(cleaned);
 const { accepted, rejected } = filterAcceptableSources(deduped);
-const withValidity = attachValidityToSources(accepted);
+const withValidity = await attachValidityToSources(accepted);
 const usable = withValidity.filter((s) => s.validity?.usable);
 const tagged = attachInitialTags(usable);
 

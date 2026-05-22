@@ -5,6 +5,7 @@ import XLSX from "xlsx";
 import { supabase } from "../lib/storage/supabaseClient.js";
 import { uploadArchiveJson } from "../lib/storage/blobArchiveStore.js";
 import { cleanPlaintext } from "../lib/cleaning/cleanPlaintext.js";
+import { checkSourceValidity } from "../lib/validation/sourceValidity.js";
 
 const FILE_PATH = process.argv[2];
 
@@ -14,6 +15,23 @@ if (!FILE_PATH) {
 
 function sha256(value = "") {
   return crypto.createHash("sha256").update(String(value)).digest("hex");
+}
+
+function inferTrustTier(publisher = "") {
+  const p = publisher.toLowerCase();
+  if (
+    p.includes("cisa") || p.includes("nist") || p.includes("ncsc") ||
+    p.includes("enisa") || p.includes("anthropic") || p.includes("openai") ||
+    p.includes("csa") || p.includes("white house") || p.includes("government")
+  ) return "primary";
+  if (
+    p.includes("google") || p.includes("microsoft") || p.includes("crowdstrike") ||
+    p.includes("unit 42") || p.includes("palo alto") || p.includes("owasp") ||
+    p.includes("arxiv") || p.includes("mandiant") || p.includes("trail of bits") ||
+    p.includes("recorded future") || p.includes("sentinelone") || p.includes("elastic") ||
+    p.includes("university") || p.includes("ieee") || p.includes("acm")
+  ) return "high";
+  return "medium";
 }
 
 function publisherFromUrl(rawUrl = "") {
@@ -60,7 +78,7 @@ function sourceTypeFromPublisher(publisher) {
 
 function tagsFromSheet(sheetName) {
   if (sheetName === "Security of AI") return ["security_of_ai", "curated"];
-  if (sheetName === "AI for Cyber") return ["ai_for_security", "curated"];
+  if (sheetName === "AI for Cyber") return ["curated"];
   if (sheetName === "AI-Enabled Threats") return ["ai_enabled_threats", "curated"];
   return ["curated"];
 }
@@ -72,7 +90,7 @@ function baselineFromSheet(sheetName) {
     return { ai_specificity_score: 80, relevance_tier: "core", main_category: "traditional_ai_threats" };
   }
   if (sheetName === "AI for Cyber") {
-    return { ai_specificity_score: 65, relevance_tier: "core", main_category: "ai_for_security" };
+    return { ai_specificity_score: 65, relevance_tier: "core", main_category: "uncategorised" };
   }
   if (sheetName === "AI-Enabled Threats") {
     return { ai_specificity_score: 75, relevance_tier: "core", main_category: "ai_enabled_threats" };
@@ -148,6 +166,7 @@ for (const sheetName of acceptedSheets) {
       publisher,
       date_published,
       source_type: sourceTypeFromPublisher(publisher),
+      trust_tier: inferTrustTier(publisher),
       sheet_category: sheetName,
       full_text: usableText,
       summary,
@@ -210,46 +229,55 @@ for (const row of dedupedRows) {
 }
 
 for (const group of grouped.values()) {
+  // Run real validity checks on all sources in this group concurrently.
+  const validities = await Promise.all(
+    group.sources.map((row) => checkSourceValidity(row))
+  );
+
+  // Drop sources that fail the hard gates (missing title, unsafe URL, etc.).
+  const validSources = group.sources.filter((_, i) => validities[i].usable);
+  const discarded = group.sources.length - validSources.length;
+
+  if (discarded > 0) {
+    console.warn(`  [${group.snapshot_id}] Discarded ${discarded} invalid curated sources (failed validation)`);
+  }
+
   const snapshot = {
     snapshot_id: group.snapshot_id,
     generated_at: new Date().toISOString(),
     period: "daily",
     stage: "curated_excel_import_summary_only",
     reporting_window: group.window,
-    count: group.sources.length,
-    discarded_count: 0,
+    count: validSources.length,
+    discarded_count: discarded,
     rejected_count: 0,
-    sources: group.sources.map((row) => ({
-      id: row.id,
-      title: row.title,
-      url: row.url,
-      publisher: row.publisher,
-      author: "",
-      date_published: row.date_published,
-      date_collected: new Date().toISOString(),
-      source_type: row.source_type,
-      raw_html: "",
-      full_text: row.full_text,
-      summary: row.summary,
-      source_text_quality: row.source_text_quality,
-      needs_full_text_fetch: row.needs_full_text_fetch,
-      relevance_tier: row.relevance_tier,
-      ai_specificity_score: row.ai_specificity_score,
-      main_category: row.main_category,
-      attachments: [],
-      trust_tier: "curated",
-      validity: {
-        source_id: row.id,
-        source_validity_score: 90,
-        credibility_label: "curated",
-        trust_tier: "curated",
-        warnings: ["Imported from curated Excel; full article text not fetched yet."],
-        usable: true,
-      },
-      tags: row.tags,
-      content_hash: row.content_hash,
-      clean_text_hash: row.clean_text_hash,
-    })),
+    sources: validSources.map((row, i) => {
+      const validity = validities[group.sources.indexOf(row)];
+      return {
+        id: row.id,
+        title: row.title,
+        url: row.url,
+        publisher: row.publisher,
+        author: "",
+        date_published: row.date_published,
+        date_collected: new Date().toISOString(),
+        source_type: row.source_type,
+        raw_html: "",
+        full_text: row.full_text,
+        summary: row.summary,
+        source_text_quality: row.source_text_quality,
+        needs_full_text_fetch: row.needs_full_text_fetch,
+        relevance_tier: row.relevance_tier,
+        ai_specificity_score: row.ai_specificity_score,
+        main_category: row.main_category,
+        attachments: [],
+        trust_tier: row.trust_tier,
+        validity,
+        tags: row.tags,
+        content_hash: row.content_hash,
+        clean_text_hash: row.clean_text_hash,
+      };
+    }),
   };
 
   const blob = await uploadArchiveJson(
@@ -267,7 +295,7 @@ for (const group of grouped.values()) {
       start_local: group.window.start_sgt,
       end_local: group.window.end_sgt,
       count: snapshot.count,
-      discarded_count: 0,
+      discarded_count: snapshot.discarded_count,
       rejected_count: 0,
       blob_path: blob.url,
     },
@@ -296,7 +324,6 @@ for (const group of grouped.values()) {
     content_hash: source.content_hash,
     clean_text_hash: source.clean_text_hash,
     blob_path: blob.url,
-    // Baseline AI relevance fields so curated sources are never purged
     relevance_tier: source.relevance_tier,
     ai_specificity_score: source.ai_specificity_score,
     main_category: source.main_category,
