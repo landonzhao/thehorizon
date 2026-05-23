@@ -15,60 +15,84 @@ Trust tier is assigned at collection time, from the source registry or connector
 | Tier | Assigned to | Credibility weight |
 |---|---|---|
 | `primary` | Government agencies (CISA, NCSC, CSA, ENISA, NIST), AI labs (Anthropic, OpenAI) | 10 |
-| `high` | Established security vendors (Google, Microsoft, CrowdStrike, Unit 42), reputable practitioner blogs (Krebs, Schneier, Trail of Bits, Simon Willison), academic institutions | 8 |
-| `medium` | General security news outlets (BleepingComputer, SecurityWeek, The Hacker News, Dark Reading, Ars Technica, Wired) | 6 |
-| `curated` | Manually imported sources from the Excel backlog | 9 |
+| `high` | Established security vendors (Google, Microsoft, CrowdStrike), reputable practitioner blogs | 8 |
+| `medium` | General security news outlets (BleepingComputer, SecurityWeek, The Hacker News) | 6 |
+| `curated` | Manually imported sources (purge-protected, not auto-ranked) | 6 |
 | `low` | Lower-confidence sources | 3 |
 | `unknown` | Undetermined — assigned when no tier is specified | 2 |
-
-**Why primary > curated**: Primary sources (governments, AI labs) are authoritative by definition. Curated sources are trusted by human curation but may be secondary analyses or blog posts; they rank just below primary.
-
-**Why the credibility weight is capped at 10**: The trust tier contributes to `priority_score` as `source_credibility_score`. At a maximum of 10 out of ~100 total, trust adjusts the ranking without overriding content relevance. A high-trust source about a minor topic should not outrank a medium-trust source about an active zero-day.
 
 **Assignment is static**: trust tier does not change after ingestion. If a publisher's reputation changes, the source registry entry is updated, and future ingestion picks up the new tier. Existing stored sources retain their original tier.
 
 ---
 
+## Structural validity score vs publisher trust score
+
+These two scores are fully independent and must not be combined at the validity layer.
+
+**`structural_validity_score`** (0–90) measures data completeness:
+- Base: 50 (title present and URL safe)
+- Publisher field present: +10
+- Publication date present and confident: up to +15
+- Full text length ≥ 500 chars: +15; ≥ 50 chars: +5; < 50 chars: –5
+- URL unreachable: –10
+- Trust tier plays **no role** in structural validity
+
+**`publisher_trust_score`** (0–10) measures publisher reputation:
+- Directly maps trust tier to a score (primary→10, curated→6, high→8, medium→6, low→3, unknown→2)
+- Reflects how much weight to give the publishing organisation, not the data quality
+
+**Why they are separate**: a CISA advisory (primary tier) with a missing title is still structurally invalid — the trust tier should not rescue a broken record. Conversely, a well-formed blog post from an unknown source has good structural validity even with a low publisher trust score.
+
+**Backward compat**: `source_validity_score` is a stored alias for `structural_validity_score`.
+
+---
+
 ## Credibility label (from validity scoring)
 
-A second, structural measure is computed by the validity layer and stored as `credibility_label`.
+A categorical label derived from `structural_validity_score` and stored alongside sources:
 
 | Score | Label |
 |---|---|
-| ≥ 85 | `primary` |
-| ≥ 75 | `high_trust` |
-| ≥ 55 | `medium_trust` |
-| ≥ 30 | `low_trust` |
-| < 30 | `do_not_use` |
+| ≥ 80 | `primary` |
+| ≥ 65 | `high_trust` |
+| ≥ 45 | `medium_trust` |
+| ≥ 25 | `low_trust` |
+| < 25 | `do_not_use` |
 
-This label reflects data completeness (title, URL, publisher, date, text length) weighted by trust tier. It is used in the dashboard UI to show users a quick structural quality signal.
-
-**The credibility label is not the trust tier**: a source from CISA (primary trust tier) that arrives with a missing title scores lower on the credibility label because the data record is incomplete, even though the source organisation is authoritative. Conversely, a well-formed record from an unknown publisher gets a medium credibility label despite having no trust tier.
+Hard gates: a missing title or an unsafe/missing URL immediately returns `credibility_label = "do_not_use"` and `structural_validity_score = 0`, regardless of trust tier.
 
 ---
 
 ## How trust tier flows downstream
 
-**Validity**: `trust_tier = "primary"` adds +35 to the validity score, making it very difficult for a government advisory to fall below the usability gate. `trust_tier = "low"` subtracts 5, making it slightly easier to fail.
+**Validity**: trust tier is NOT used to adjust the structural validity score. It is only used to set `publisher_trust_score` (0–10).
 
-**Purge protection**: `trust_tier = "curated"` sources are never purged during classification, regardless of `ai_specificity_score`. Manually imported sources are protected because they were deliberately added and should not be silently deleted.
+**Purge protection**: `trust_tier = "curated"` sources are never deleted by the AI specificity purge or any automated pipeline step.
 
-**Priority scoring**: trust tier feeds directly into `source_credibility_score` via `CREDIBILITY_BY_TIER`. This is one of seven components of `priority_score`.
+**Priority scoring (v5)**: trust tier feeds directly into `source_credibility_score` via `CREDIBILITY_BY_TIER`. This is one of seven components of `priority_score`.
 
-**Report scoring**: `source_credibility_score` is also one of five components of `report_score`. High-trust sources rank higher in reports, all else equal, because analysts need to know whether a finding comes from a government advisory or a personal blog.
+**Priority scoring (v6)**: v6 scoring adds a `publisher_type` dimension extracted by LLM. `source_credibility_score` becomes the average of `publisher_type` score and `trust_tier` score. See `lib/scoring/relevanceRules.js: PUBLISHER_CREDIBILITY_V6`.
+
+**Report scoring**: `source_credibility_score` is also one of five components of `report_score`.
 
 ---
 
 ## Curated sources
 
-The `curated` trust tier is specifically for sources imported manually via `scripts/importCuratedExcel.js`. These are typically high-quality historical sources or sources from organisations that do not have public RSS feeds.
+The `curated` trust tier is specifically for sources imported manually via `scripts/importCuratedExcel.js`. These are typically high-quality historical sources or sources from organisations without public RSS feeds.
+
+**Curated means: purge protection only — not automatic high ranking.**
 
 Curated sources:
 - Are never deleted by the AI specificity purge (score < 10 threshold does not apply)
 - Are never deleted by any automated pipeline step
-- Carry a credibility weight of 9 (between `high` and `primary`)
-- Can be identified by querying `trust_tier = 'curated'`
+- Carry a credibility weight of **6** (same as medium) — this is intentional; curated sources are protected, not privileged
+- Can be identified by querying `is_curated = true` or `trust_tier = 'curated'`
 
-This allows analysts to maintain a protected set of reference sources that remain in the database regardless of what automated classification decides.
+A curated source about an off-topic subject will not outrank an organically discovered primary advisory about an active zero-day. Analysts who deliberately import a source should enrich it (tags, category) via `importCuratedExcel.js` if they want it ranked above the automatic threshold.
 
-Curated sources are subject to the same validation gates as any other source. Missing title or missing/unsafe URL causes immediate rejection regardless of curated status. The "curated" tag (set on every imported source) is used for purge protection across all pipeline stages — sources carrying this tag are never deleted by the AI specificity purge, even if their trust tier is no longer literally `"curated"`. Trust tier is inferred from the publisher (primary, high, medium) and is not hardcoded.
+**Why curated ≠ high**: In earlier versions, `CREDIBILITY_BY_TIER.curated = 9` caused all imported sources to rank above automatically discovered medium-trust sources, regardless of content relevance. Since the pipeline now imports hundreds of curated background sources, this inflated the report with historical material instead of recent events.
+
+**The `is_curated` field**: a boolean on every source row, separate from `trust_tier`. A source can have `is_curated = true` with `trust_tier = "high"` if the publisher is high-trust by the registry but the source was manually imported. `is_curated` governs purge protection; `trust_tier` governs credibility scoring.
+
+**Version stamp**: trust version is stored as `trust_version = "trust-v2.0"` on every source row, allowing downstream tools to detect stale trust assessments.
