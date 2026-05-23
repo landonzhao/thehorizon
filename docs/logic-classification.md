@@ -18,7 +18,16 @@ e| Step | File | Purpose | API keys |
 | Taxonomy (tags + AI score) | `lib/claims/enrichSource.js` | Identify AI threat techniques; score AI relevance | `OPENAI_API_KEY`, `OPENAI_API_KEY_2`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `GEMINI_API_KEY_2` |
 | Category derivation | `lib/classification/deriveCategory.js` | Tag counts → main_category | None — deterministic |
 
-**Provider rotation order**: OpenAI → OpenAI-2 → Groq (`llama-3.3-70b-versatile`) → Gemini Flash 2.0 → Gemini 2.5 Flash → Gemini Flash-2 → Gemini 2.5-2. Providers are only added to the rotation when their key is present in the environment. Quota-exhausted providers are skipped; rate-limited providers wait (up to 30s) and retry up to 3 times on the same provider before skipping. The 2.5-second inter-call delay in `classifyStoredSources.js` keeps the pipeline within Groq's free-tier rate limit (30 RPM).
+**Provider rotation order** (7 slots, first available key is used):
+1. OpenAI `gpt-4o-mini` (`OPENAI_API_KEY`)
+2. OpenAI-2 `gpt-4o-mini` (`OPENAI_API_KEY_2`, secondary key)
+3. Groq `llama-3.3-70b-versatile` (`GROQ_API_KEY`, free tier)
+4. Gemini Flash `gemini-2.0-flash` (`GEMINI_API_KEY`, higher RPD quota)
+5. Gemini 2.5 `gemini-2.5-flash` (`GEMINI_API_KEY`)
+6. Gemini Flash-2 `gemini-2.0-flash` (`GEMINI_API_KEY_2`, secondary key)
+7. Gemini 2.5-2 `gemini-2.5-flash` (`GEMINI_API_KEY_2`, last resort)
+
+Quota-exhausted providers (HTTP 429 with `insufficient_quota` / `RESOURCE_EXHAUSTED`) are skipped. Rate-limited providers wait the `retry-after` duration (up to 30s) and retry the same provider up to 3 times. Non-quota errors (auth, network) bail immediately. The 2.5-second inter-call delay in `classifyStoredSources.js` keeps throughput within Groq's free-tier rate limit (30 RPM).
 
 ---
 

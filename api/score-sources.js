@@ -16,6 +16,7 @@ export default async function handler(req, res) {
       end: req.query.end,
       limit: Number(req.query.limit || 1000),
       testSet: req.query.test_set === "true",
+      useV6: req.query.use_v6 === "true",
     });
 
     let period_stats = null;

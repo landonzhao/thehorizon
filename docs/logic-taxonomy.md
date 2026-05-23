@@ -117,13 +117,55 @@ These tags carry no category signal — they appear alongside threat tags from a
 | Tag | Definition |
 |---|---|
 | `cve` | References a specific CVE identifier |
-| `actively_exploited` | In-the-wild exploitation confirmed by a trusted source |
+| `actively_exploited` | In-the-wild exploitation of a specific vulnerability confirmed by a trusted source |
 | `proof_of_concept` | Publicly available PoC exploit or research demonstration |
 | `vulnerability` | Vulnerability disclosure (with or without CVE) |
 | `supply_chain` | Software or hardware supply chain attack vector |
 | `critical_infrastructure` | Attack targets critical infrastructure sectors |
 | `nation_state` | Attributed to or characteristic of a nation-state threat actor |
 | `research` | Academic or peer-reviewed research paper |
+
+---
+
+## Tag disambiguation
+
+The following pairs and groups are frequently misapplied. The enrichment prompt includes explicit disambiguation rules for each.
+
+### `ai_disinformation`
+ONLY for AI-generated or AI-amplified **synthetic narratives, fake news, coordinated inauthentic behaviour, or propaganda operations** — where the attack payload itself is false information. Does NOT apply to:
+- Deepfake detection research (even if the paper is about deepfakes)
+- Deepfake detection benchmarks or academic deepfake analysis
+- Security research about AI systems
+- Vulnerability disclosures for AI products
+- News reporting about the AI industry
+
+A paper titled "Temporal Artifact Analysis for Deepfake Detection" is `deepfake` only (defensive research, `ai_enabled_threats`), not `ai_disinformation`.
+
+### `actively_exploited`
+ONLY for confirmed in-the-wild exploitation of a **specific vulnerability, CVE, or named technique** against real targets, confirmed by a trusted source. Does NOT apply to:
+- Reports that threat actors are "using AI tools generally" (e.g. "hackers use LLMs to generate phishing" → use `ai_generated_phishing` instead)
+- Research demonstrations without real-world exploitation confirmation
+- Theoretical capability descriptions
+
+### `sensitive_data_disclosure`
+ONLY for attacks that extract sensitive data **from an LLM or AI system** — system prompt extraction, PII leakage via LLM memorisation, indirect prompt injection that exfiltrates context window data. Does NOT apply to:
+- General data breaches unrelated to AI
+- Stolen images used for deepfakes
+- Social engineering using AI-generated content
+- Deepfake sextortion (correct tags: `deepfake`, category: `ai_enabled_threats`)
+
+### `deepfake` category routing
+- **Deepfake attacks, fraud, sextortion, impersonation** → `ai_enabled_threats` + `deepfake` tag
+- **Deepfake detection research** → `ai_enabled_threats` or `traditional_ai_threats` (if ML classifier-based) + `deepfake` tag only — **not** `ai_disinformation`
+- **Deepfake detection papers do NOT get `ai_disinformation`**, even though they discuss deepfakes
+
+### `model_extraction`
+ONLY when an external adversary with no model access queries a black-box API to reconstruct model behaviour through output analysis. Does NOT apply to:
+- Papers using internal model activations (activation steering, probing classifiers, representation engineering)
+- White-box research methods
+- Hugging Face package or model checkpoint manipulation (→ `ml_supply_chain`)
+
+If the paper contains "probe", "steering", "activation", "representation", "latent", "gradient", "jailbreak", or "white-box" → do NOT assign `model_extraction`.
 
 ---
 
