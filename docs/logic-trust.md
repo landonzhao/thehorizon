@@ -12,14 +12,16 @@ Trust operates at two levels: the **trust tier** set at collection time, and the
 
 Trust tier is assigned at collection time, from the source registry or connector metadata. It is a human-curated judgement about the publishing organisation.
 
-| Tier | Assigned to | Credibility weight |
-|---|---|---|
-| `primary` | Government agencies (CISA, NCSC, CSA, ENISA, NIST), AI labs (Anthropic, OpenAI) | 10 |
-| `high` | Established security vendors (Google, Microsoft, CrowdStrike), reputable practitioner blogs | 8 |
-| `medium` | General security news outlets (BleepingComputer, SecurityWeek, The Hacker News) | 6 |
-| `curated` | Manually imported sources (purge-protected, not auto-ranked) | 6 |
-| `low` | Lower-confidence sources | 3 |
-| `unknown` | Undetermined — assigned when no tier is specified | 2 |
+| Tier | Assigned to | `publisher_trust_score` | `CREDIBILITY_BY_TIER` (scoring) |
+|---|---|---|---|
+| `primary` | Government agencies (CISA, NCSC, CSA, ENISA, NIST), AI labs (Anthropic, OpenAI) | 10 | 10 |
+| `high` | Established security vendors (Google, Microsoft, CrowdStrike), reputable practitioner blogs | 8 | 8 |
+| `medium` | General security news outlets (BleepingComputer, SecurityWeek, The Hacker News) | 6 | 6 |
+| `curated` | Manually imported sources (purge-protected, not auto-ranked) | 9 | 6 |
+| `low` | Lower-confidence sources | 3 | 3 |
+| `unknown` | Undetermined — assigned when no tier is specified | 2 | 2 |
+
+Two weights apply because curated sources serve different purposes in different contexts. `publisher_trust_score` (stored in `sourceValidity.js`) is a metadata field reflecting that manually imported sources come from known-good publishers — it scores 9. `CREDIBILITY_BY_TIER` (in `relevanceRules.js`) feeds the priority/report scoring formula — curated scores 6 (same as medium) so that imported background sources don't auto-outrank organically discovered primary advisories.
 
 **Assignment is static**: trust tier does not change after ingestion. If a publisher's reputation changes, the source registry entry is updated, and future ingestion picks up the new tier. Existing stored sources retain their original tier.
 
@@ -38,8 +40,9 @@ These two scores are fully independent and must not be combined at the validity 
 - Trust tier plays **no role** in structural validity
 
 **`publisher_trust_score`** (0–10) measures publisher reputation:
-- Directly maps trust tier to a score (primary→10, curated→6, high→8, medium→6, low→3, unknown→2)
-- Reflects how much weight to give the publishing organisation, not the data quality
+- Directly maps trust tier to a score (primary→10, curated→9, high→8, medium→6, low→3, unknown→2)
+- Stored as a metadata field on each source; reflects the known quality of the publishing organisation
+- Distinct from `CREDIBILITY_BY_TIER` (scoring weight): curated sources score 9 here but contribute 6 to the priority/report scoring formula
 
 **Why they are separate**: a CISA advisory (primary tier) with a missing title is still structurally invalid — the trust tier should not rescue a broken record. Conversely, a well-formed blog post from an unknown source has good structural validity even with a low publisher trust score.
 
@@ -51,13 +54,15 @@ These two scores are fully independent and must not be combined at the validity 
 
 A categorical label derived from `structural_validity_score` and stored alongside sources:
 
-| Score | Label |
-|---|---|
-| ≥ 80 | `primary` |
-| ≥ 65 | `high_trust` |
-| ≥ 45 | `medium_trust` |
-| ≥ 25 | `low_trust` |
-| < 25 | `do_not_use` |
+| Score | Label | Reachable? |
+|---|---|---|
+| ≥ 80 | `primary` | No — maximum score is 65 |
+| ≥ 65 | `high_trust` | Yes — perfect source (publisher + date + long text) |
+| ≥ 45 | `medium_trust` | Yes — most well-formed sources |
+| ≥ 25 | `low_trust` | Yes — poorly formed records |
+| < 25 | `do_not_use` | Yes — source dropped before storage |
+
+The `primary` credibility label is unreachable. The scoring algorithm uses absence penalties (not presence bonuses) so the maximum achievable score is 65. This is a known calibration issue — the `do_not_use` gate (the only functionally significant threshold) is unaffected.
 
 Hard gates: a missing title or an unsafe/missing URL immediately returns `credibility_label = "do_not_use"` and `structural_validity_score = 0`, regardless of trust tier.
 

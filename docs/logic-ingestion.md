@@ -227,16 +227,17 @@ LLM Discovery sources carry a pre-computed `eligible_for_daily_report` in their 
 
 ---
 
-## Event clustering (scaffolding)
+## Event clustering
 
-The following fields are added to every source row but are not yet populated by any pipeline step. They are reserved for a future event clustering pass that will group coverage of the same incident across multiple sources:
+Sources are linked to event clusters by the intelligence layer, which runs separately from ingestion (`scripts/buildIntelligenceBase.js`). After the intelligence pipeline runs, `event_cluster_id` is written back to the `sources` table for each source that was assigned to an event cluster.
 
-- `event_cluster_id` — UUID linking sources about the same event
-- `cluster_key` — normalised event fingerprint (e.g. CVE ID + actor)
-- `is_primary_source` — true if this source is the authoritative origin (CISA advisory > news summary)
-- `is_follow_on_source` — true if this source is a secondary report or commentary
-- `adds_new_information` — true if this source adds new facts beyond the cluster's existing coverage
-- `related_sources` — array of source IDs in the same cluster
+| Field | Populated by | Description |
+|---|---|---|
+| `event_cluster_id` | `storeIntelligenceBase.js` → `updateSourceEventIds()` | ID of the event cluster this source belongs to |
+
+The remaining cluster metadata fields (`cluster_key`, `is_primary_source`, `is_follow_on_source`, `adds_new_information`, `related_sources`) are declared in `ingestion-v2.sql` as scaffolding columns and are currently not written by any pipeline step. They are reserved for a future enrichment pass if more granular source-role attribution is needed.
+
+See `docs/logic-intelligence.md` for the full event clustering algorithm.
 
 ---
 

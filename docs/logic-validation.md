@@ -2,7 +2,7 @@
 
 ## What it does
 
-Validation is a three-stage gate that runs after cleaning and before storage. It removes duplicates, rejects sources of the wrong type, and scores each source's structural integrity. Sources that fail hard gates are dropped before they ever reach the database.
+Validation is a three-stage gate that runs after cleaning and before storage. It removes duplicates, rejects sources of the wrong type, and produces two independent scores that measure structural data quality and publisher reputation separately. Sources that fail hard gates are dropped before they reach the database.
 
 The three stages run in order: deduplication → source type filter → validity scoring.
 
@@ -19,100 +19,131 @@ The three stages run in order: deduplication → source type filter → validity
 - Strips trailing slashes
 - Lowercases the entire URL
 
-After canonicalisation, if two sources share the same canonical URL, the second is dropped.
+After canonicalisation, if two sources share the same canonical URL, the lower-quality one is dropped. Quality is measured by: trust tier, text richness, date presence, date confidence, and CVE references in the title or text. This means a CISA advisory (primary tier, full text) beats a news summary of the same URL even if the news article was ingested first.
 
 **Title normalisation**:
 - Lowercases the title
 - Strips all punctuation
 - Collapses whitespace
 
-If two sources share the same normalised title (even with different URLs), the second is dropped. This catches cases where a CVE advisory is syndicated to multiple outlets with the same headline.
+If two sources share the same normalised title (even with different URLs), the lower-quality one is dropped. This catches syndicated CVE advisories that appear across multiple outlets with identical headlines.
 
-**First-seen wins**: The first occurrence in the array is kept. Since connectors run in parallel and their results are concatenated in a fixed order, this is deterministic.
-
-**Note**: Deduplication across different daily runs is handled by the database layer — Supabase upserts on `id` (URL-derived SHA256). Within a single run, the in-memory deduplication above handles it.
+**Cross-run deduplication**: handled by the database layer — Supabase upserts on `id` (URL-derived SHA256) silently overwrite rather than duplicate.
 
 ---
 
 ## Stage 2: Source type filter
 
-**Purpose**: Accept only source types the pipeline is designed to handle. Reject source types that would never contribute useful intelligence.
+**Purpose**: Accept source types the pipeline is designed to handle. All decisions are based on source type and, for conditional types, source content.
 
-**Accepted types** (whitelist):
-- `news` — general news with security relevance
-- `vendor_advisory` — security vendor advisories
-- `security_blog` — practitioner and vendor security blogs
-- `government_advisory` — CISA, NCSC, CSA, ENISA, etc.
-- `policy_update` — AI/cyber policy documents
-- `threat_intel` — structured threat intelligence
-- `research_paper` — academic papers (primarily arXiv)
-- `security_framework` — OWASP, NIST, MITRE frameworks
-- `ai_lab_update` — AI lab safety and research updates
-- `vulnerability_database` — NVD CVE records
+**Always accepted** (unconditional):
 
-**Explicitly rejected types** (not a failure to match, a hard rejection):
-- `open_source_project` — code repositories without intelligence value
-- `social_signal` — social media posts (too noisy, no editorial control)
-- `ai_threat_framework` — framework documents are reference material, not intelligence
-- `incident_database` — incident database entries (often historical, already processed via dedicated connectors)
+| Source type | Accepted |
+|---|---|
+| `news` | Yes |
+| `vendor_advisory` | Yes |
+| `security_blog` | Yes |
+| `government_advisory` | Yes |
+| `policy_update` | Yes |
+| `threat_intel` | Yes |
+| `research_paper` | Yes |
+| `security_framework` | Yes |
+| `ai_lab_update` | Yes |
+| `vulnerability_database` | Yes |
 
-**Unknown types**: Also rejected. The filter is a whitelist. If a new connector introduces a type not in the list, it fails visibly rather than silently passing through.
+**Conditionally accepted**:
+
+| Source type | Accepted when | `needs_review` |
+|---|---|---|
+| `unknown` | Always (type not determinable) | Yes |
+| `incident_database` | Always | No |
+| `ai_threat_framework` | Always | No |
+| `social_signal` | `trust_tier` is `primary`, `high`, or `curated` only | No |
+| `open_source_project` | Title or full text contains a CVE reference or security advisory language | No |
+
+**Hard rejected**: Any type not listed above (completely unknown connector type).
+
+Curated sources bypass type filtering entirely — they were manually vetted by an analyst before import.
 
 ---
 
-## Stage 3: Validity scoring
+## Stage 3: Validity scoring — split model
 
-**Purpose**: Assess the structural integrity of each source and determine whether it is usable for downstream processing.
+**Purpose**: Assess each source on two independent dimensions: structural data completeness and publisher reputation. These must not be combined at this layer.
 
-**Scoring starts at 50/100**, then adjustments are applied:
+### `structural_validity_score` (0–90)
 
-| Condition | Adjustment |
+Measures data completeness only. Trust tier has no effect.
+
+| Condition | Effect |
 |---|---|
-| Trust tier = primary | +35 |
-| Trust tier = high | +25 |
-| Trust tier = medium | +10 |
-| Trust tier = low | −5 |
-| Missing title | −40 |
-| Missing publisher | −10 |
-| Missing publication date | −5 |
-| Full text < 50 characters | −5 |
-| URL returns error response | −10 |
+| Base (title present + URL safe) | 50 |
+| Publisher field present | +0 |
+| Publisher field missing | −10 |
+| Date present and confidence = exact or estimated | +0 |
+| Date missing | −15 |
+| Date confidence = low | −5 |
+| Date confidence = none | −8 |
+| Full text ≥ 500 chars | +15 |
+| Full text ≥ 50 chars | +5 |
+| Full text < 50 chars | −5 |
+| URL returns confirmed error (4xx/5xx) | −10 |
 
-Missing title and missing/unsafe URL are **hard gates**: sources failing either check are immediately rejected with score 0 before any other scoring occurs. They never reach the database.
+**Maximum possible score: 65** (50 base + 15 for text ≥ 500, with publisher and date present). A source missing the publisher scores max 55; missing the date scores max 50.
 
-The score is clamped to [0, 100].
+**Hard gates** — score = 0, label = `do_not_use`, source dropped before any other check:
+- Missing or empty title
+- Missing, unsafe, or HTTP URL that does not redirect to HTTPS
 
-**Credibility label** from score:
+### `publisher_trust_score` (0–10)
 
-| Score | Label |
+Measures publisher reputation. Derived solely from `trust_tier` at collection time. Independent of data quality.
+
+| Trust tier | `publisher_trust_score` |
 |---|---|
-| ≥ 85 | `primary` |
-| ≥ 75 | `high_trust` |
-| ≥ 55 | `medium_trust` |
-| ≥ 30 | `low_trust` |
-| < 30 | `do_not_use` |
+| `primary` | 10 |
+| `curated` | 9 |
+| `high` | 8 |
+| `medium` | 6 |
+| `low` | 3 |
+| `unknown` | 2 |
 
-**Usability gate**: A source is usable if and only if:
-- It has a non-empty title
-- It has a non-empty URL
-- The URL is safe (see below)
-- The credibility label is not `do_not_use`
+Note: `publisher_trust_score = 9` for curated sources reflects that manually imported sources are from known-good publishers. This is separate from their scoring weight (see `logic-trust.md`).
 
-Sources that are not usable are dropped before storage.
+### Credibility label
 
-**URL safety check**:
-- Must be HTTPS. HTTP is rejected (no exception).
+Derived from `structural_validity_score` alone. Used to determine source usability.
+
+| Score | Label | Reachable? |
+|---|---|---|
+| ≥ 80 | `primary` | No — max score is 65 |
+| ≥ 65 | `high_trust` | Yes — perfect source (publisher + date + long text) |
+| ≥ 45 | `medium_trust` | Yes — most well-formed sources |
+| ≥ 25 | `low_trust` | Yes — poor data quality |
+| < 25 | `do_not_use` | Yes — dropped before storage |
+
+The `primary` label is unreachable because the score uses penalties (−10 for missing publisher, −15 for missing date) rather than bonuses for having them. A perfect source scores exactly 65 and lands at `high_trust`. This is a known calibration issue — the label exists in the code but is never assigned.
+
+A source is usable (`usable: true`) if and only if its `credibility_label` is not `do_not_use`. The higher labels are informational metadata stored in archives; they do not gate the scoring pipeline.
+
+### URL safety check
+
+Runs concurrently for all sources in a batch (one timeout window per batch).
+
+- Must be HTTPS. HTTP is only accepted if it redirects to an HTTPS destination.
 - Must not be localhost, 127.0.0.1, ::1, or any `.local` / `.internal` hostname.
 - Must not be a private IPv4 address (10.x, 172.16–31.x, 192.168.x, 169.254.x).
 
-A HEAD request is issued against each URL (3-second timeout). A confirmed error response (4xx/5xx) applies a −10 penalty and records `url_reachable: false` on the validity result. A timeout or network error records `url_reachable: null` with no penalty — the source may be temporarily unreachable. All checks run concurrently so the batch adds only one timeout window to the pipeline.
+A HEAD request is issued against each URL (3-second timeout). A confirmed error response (4xx/5xx) applies a −10 penalty and records `url_reachable: false`. A timeout or network error records `url_reachable: null` with no penalty.
 
-This prevents server-side request forgery if a malicious RSS feed includes internal URLs, and ensures sources remain accessible for analyst follow-up.
+The `final_url` (HTTPS destination after any HTTP→HTTPS redirect) is stored separately and used in report link construction.
 
 ---
 
-## What the validity score is and is not
+## What the two scores mean
 
-The validity score measures **data quality and structural completeness**. It is not a measure of content relevance or credibility of the publication itself. A low validity score means "this record is poorly formed" — missing key fields, unsafe URL, etc.
+**`structural_validity_score`** answers: *is this source record well-formed?* A low score means missing fields or broken URLs, not low-quality content.
 
-Content credibility (is this a trustworthy source of AI threat intelligence?) is handled separately via `trust_tier` (set at collection time from the source registry) and ultimately the priority scoring layer.
+**`publisher_trust_score`** answers: *how much weight should we give the publishing organisation?* This flows downstream into the priority and report scoring formula (`lib/scoring/relevanceRules.js: CREDIBILITY_BY_TIER`), where curated sources score 6 (same as medium) — see `logic-trust.md`.
+
+The two scores are kept separate so a primary-tier publisher with a missing title is still flagged as `do_not_use`, and a well-formed blog post from an unknown source is correctly assessed for its structural quality.
