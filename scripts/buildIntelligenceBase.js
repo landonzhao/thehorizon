@@ -46,6 +46,7 @@ import { buildMonthlyHorizonScanData } from "../lib/reports/buildMonthlyHorizonS
 import { generateMonthlyHorizonScan } from "../lib/reports/generateMonthlyHorizonScan.js";
 import { generatePeriodPageData } from "../lib/pages/generatePeriodPageData.js";
 import { uploadArchiveJson } from "../lib/storage/blobArchiveStore.js";
+import { printTokenSummary } from "../lib/utils/tokenUsage.js";
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
 
@@ -56,12 +57,13 @@ const getArg = (name, def) => {
 };
 const hasFlag = (name) => args.includes(name);
 
-const PERIOD  = getArg("--period", "monthly");
-const START   = getArg("--start", null);
-const END     = getArg("--end", null);
-const LIMIT   = parseInt(getArg("--limit", "2000"), 10);
-const SKIP_LLM = hasFlag("--skip-llm");
-const DRY_RUN  = hasFlag("--dry-run");
+const PERIOD          = getArg("--period", "monthly");
+const START           = getArg("--start", null);
+const END             = getArg("--end", null);
+const LIMIT           = parseInt(getArg("--limit", "2000"), 10);
+const SKIP_LLM        = hasFlag("--skip-llm");
+const DRY_RUN         = hasFlag("--dry-run");
+const INCLUDE_CURATED = hasFlag("--include-curated");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -74,13 +76,25 @@ function log(msg) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  log(`Building intelligence base — period=${PERIOD} limit=${LIMIT}${SKIP_LLM ? " [skip-llm]" : ""}${DRY_RUN ? " [dry-run]" : ""}`);
+  log(`Building intelligence base — period=${PERIOD} limit=${LIMIT}${SKIP_LLM ? " [skip-llm]" : ""}${DRY_RUN ? " [dry-run]" : ""}${INCLUDE_CURATED ? " [+curated]" : ""}`);
 
   // ── 1. Load sources ─────────────────────────────────────────────────────────
   log("Loading sources from Supabase...");
   const sources = await listSources({ start: START, end: END, limit: LIMIT });
-  const eligibleSources = sources.filter((s) => (s.ai_specificity_score || 0) >= 10 && (s.priority_score || 0) > 0);
-  log(`  Loaded ${sources.length} sources, ${eligibleSources.length} eligible for clustering`);
+
+  let allSources = sources;
+  if (INCLUDE_CURATED) {
+    const curated = await listSources({ trust_tier: "curated", limit: 2000 });
+    const seen = new Set(sources.map((s) => s.id));
+    const newCurated = curated.filter((s) => !seen.has(s.id));
+    allSources = [...sources, ...newCurated];
+    log(`  Loaded ${sources.length} date-filtered + ${newCurated.length} curated (${allSources.length} total)`);
+  } else {
+    log(`  Loaded ${sources.length} sources`);
+  }
+
+  const eligibleSources = allSources.filter((s) => (s.ai_specificity_score || 0) >= 10 && (s.priority_score || 0) > 0);
+  log(`  ${eligibleSources.length} eligible for clustering (ai_specificity >= 10, priority_score > 0)`);
 
   // ── 2. Event clustering ─────────────────────────────────────────────────────
   log("Clustering sources into events...");
@@ -226,6 +240,8 @@ async function main() {
   console.log(`  Convergence pts:  ${convergencePoints.length}`);
   console.log(`  Report length:    ${reportMarkdown.length.toLocaleString()} chars`);
   if (DRY_RUN) console.log("  [dry-run] No data written to Supabase or Blob");
+
+  if (!SKIP_LLM) printTokenSummary(eligibleSources.length);
 
   return {
     events: scoredEvents,
