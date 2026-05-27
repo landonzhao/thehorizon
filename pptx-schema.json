@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Horizon Scan Deck Schema",
+  "description": "Structured JSON schema for AI x Security Horizon Scan PPTX generation. RAG pipeline outputs this schema; the PPTX generator consumes it. No PowerPoint formatting logic belongs in the JSON.",
+  "version": "1.0",
+
+  "slide_types": {
+    "cover": {
+      "layout_index": 0,
+      "description": "Cover/title slide with background image from template",
+      "required_fields": ["title"],
+      "optional_fields": ["subtitle", "date", "presenter", "event", "notes"]
+    },
+    "section_divider": {
+      "layout_index": 4,
+      "description": "Full-bleed section break with centred large title",
+      "required_fields": ["title"],
+      "optional_fields": ["subtitle", "notes"]
+    },
+    "section_header": {
+      "layout_index": 6,
+      "description": "Section header with background image and title",
+      "required_fields": ["title"],
+      "optional_fields": ["notes"]
+    },
+    "bullets": {
+      "layout_index": 1,
+      "description": "Title + single content area with bullet list. Default for most analytical slides.",
+      "required_fields": ["title", "bullets"],
+      "optional_fields": ["callouts", "key_stats", "citations", "notes", "singapore_relevance"]
+    },
+    "two_column": {
+      "layout_index": 2,
+      "description": "Title + two side-by-side content columns",
+      "required_fields": ["title", "left_column", "right_column"],
+      "optional_fields": ["citations", "notes"]
+    },
+    "comparison": {
+      "layout_index": 3,
+      "description": "Title + two labelled comparison columns (header + body each side)",
+      "required_fields": ["title", "left_header", "left_bullets", "right_header", "right_bullets"],
+      "optional_fields": ["citations", "notes"]
+    },
+    "blank": {
+      "layout_index": 5,
+      "description": "Blank slide with footer/slide-number only. Use for custom-layout slides.",
+      "required_fields": [],
+      "optional_fields": ["notes"]
+    }
+  },
+
+  "semantic_aliases": {
+    "executive_summary": "bullets",
+    "timeline":          "bullets",
+    "threat_category":   "bullets",
+    "case_study":        "bullets",
+    "recommendations":   "bullets",
+    "sources":           "bullets",
+    "closing":           "bullets",
+    "ai_as_target":      "bullets",
+    "ai_as_threat":      "bullets",
+    "ai_as_tool":        "bullets"
+  },
+
+  "field_definitions": {
+    "title": {
+      "type": "string",
+      "description": "Primary slide heading. Populated into idx=0 placeholder.",
+      "max_chars": 80
+    },
+    "subtitle": {
+      "type": "string",
+      "description": "Secondary heading or date/event line for cover and divider slides."
+    },
+    "bullets": {
+      "type": "array",
+      "description": "Ordered list of bullet items for the main content area.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Simple bullet text at level 0"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "text":  { "type": "string", "description": "Bullet text" },
+              "level": { "type": "integer", "minimum": 0, "maximum": 4, "description": "Indentation level: 0=top, 1=sub, 2=sub-sub" },
+              "bold":  { "type": "boolean", "description": "Bold emphasis" },
+              "label": { "type": "string", "description": "Optional section label rendered before a group of sub-bullets" }
+            },
+            "required": ["text"]
+          }
+        ]
+      }
+    },
+    "callouts": {
+      "type": "array",
+      "description": "Highlighted evidence callouts or key statistics (rendered as styled text boxes if supported).",
+      "items": {
+        "type": "object",
+        "properties": {
+          "stat":    { "type": "string", "description": "The headline number or fact" },
+          "context": { "type": "string", "description": "One-line explanation" },
+          "source":  { "type": "string", "description": "Attribution" }
+        }
+      }
+    },
+    "key_stats": {
+      "type": "array",
+      "description": "Quantitative data points surfaced from sources. Same as callouts, kept separate for planning purposes.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "value":   { "type": "string" },
+          "label":   { "type": "string" },
+          "source":  { "type": "string" }
+        }
+      }
+    },
+    "left_column": {
+      "type": "object",
+      "description": "Left content area for two_column layout.",
+      "properties": {
+        "header":  { "type": "string", "description": "Optional column header (bold, level 0)" },
+        "bullets": { "type": "array", "description": "Bullet items for this column" }
+      }
+    },
+    "right_column": {
+      "type": "object",
+      "description": "Right content area for two_column layout.",
+      "properties": {
+        "header":  { "type": "string" },
+        "bullets": { "type": "array" }
+      }
+    },
+    "left_header":  { "type": "string", "description": "Column label for comparison layout left side" },
+    "left_bullets": { "type": "array",  "description": "Content items for comparison layout left side" },
+    "right_header": { "type": "string", "description": "Column label for comparison layout right side" },
+    "right_bullets":{ "type": "array",  "description": "Content items for comparison layout right side" },
+    "citations": {
+      "type": "array",
+      "description": "Source attribution strings appended as small-text footnotes.",
+      "items": { "type": "string" }
+    },
+    "notes": {
+      "type": "string",
+      "description": "Speaker notes text. Populated into the slide notes pane."
+    },
+    "singapore_relevance": {
+      "type": "string",
+      "description": "Optional Singapore-specific relevance note for local context."
+    },
+    "date":      { "type": "string", "description": "Date string for cover slide" },
+    "presenter": { "type": "string", "description": "Presenter name/affiliation for cover slide" },
+    "event":     { "type": "string", "description": "Event name for cover slide" }
+  },
+
+  "slide_object_schema": {
+    "type": "object",
+    "required": ["slide_type"],
+    "properties": {
+      "slide_type":           { "type": "string" },
+      "title":                { "type": "string" },
+      "subtitle":             { "type": "string" },
+      "bullets":              { "type": "array" },
+      "callouts":             { "type": "array" },
+      "key_stats":            { "type": "array" },
+      "left_column":          { "type": "object" },
+      "right_column":         { "type": "object" },
+      "left_header":          { "type": "string" },
+      "left_bullets":         { "type": "array" },
+      "right_header":         { "type": "string" },
+      "right_bullets":        { "type": "array" },
+      "citations":            { "type": "array" },
+      "notes":                { "type": "string" },
+      "singapore_relevance":  { "type": "string" },
+      "date":                 { "type": "string" },
+      "presenter":            { "type": "string" },
+      "event":                { "type": "string" }
+    }
+  },
+
+  "deck_object_schema": {
+    "type": "object",
+    "required": ["title", "slides"],
+    "properties": {
+      "title":       { "type": "string", "description": "Deck title for metadata" },
+      "period":      { "type": "string", "description": "Reporting period, e.g. 2025–2026" },
+      "generated":   { "type": "string", "description": "ISO 8601 generation timestamp" },
+      "source_count":{ "type": "integer", "description": "Number of sources analysed" },
+      "slides":      { "type": "array",  "items": { "$ref": "#/slide_object_schema" } }
+    }
+  },
+
+  "future_fields": {
+    "description": "Reserved fields for future pipeline versions",
+    "chart": {
+      "type": "object",
+      "properties": {
+        "chart_type": { "type": "string", "enum": ["bar", "line", "pie", "radar", "scatter"] },
+        "labels":     { "type": "array" },
+        "series":     { "type": "array" }
+      }
+    },
+    "image": {
+      "type": "object",
+      "properties": {
+        "path":    { "type": "string" },
+        "caption": { "type": "string" },
+        "alt":     { "type": "string" }
+      }
+    },
+    "timeline_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "date":  { "type": "string" },
+          "event": { "type": "string" }
+        }
+      }
+    }
+  }
+}

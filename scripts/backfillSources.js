@@ -18,7 +18,7 @@
  */
 
 import "dotenv/config";
-import { collectRawSources } from "../lib/sources/collectRawSources.js";
+import { collectRawSources } from "../lib/pipeline/ingest/collectRawSources.js";
 import { saveSnapshotToDatabase } from "../lib/storage/snapshotDatabase.js";
 
 const SGT_OFFSET_MS = 8 * 60 * 60 * 1000;

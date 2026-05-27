@@ -1,14 +1,12 @@
 /**
- * Cleaning, archiving, and trust logic tests — no network calls, no DB.
+ * Cleaning layer tests — no network calls, no DB.
  * Run with: node tests/cleaning.test.js
  */
 
 import assert from "node:assert/strict";
-import { extractStructuredContent } from "../lib/cleaning/extractStructuredContent.js";
-import { cleanPlaintext } from "../lib/cleaning/cleanPlaintext.js";
-import { cleanSources, CLEANING_VERSION } from "../lib/cleaning/cleanSources.js";
-import { scoreSource } from "../lib/scoring/scoreSource.js";
-import { CREDIBILITY_BY_TIER } from "../lib/scoring/relevanceRules.js";
+import { extractStructuredContent } from "../lib/pipeline/clean/extractStructuredContent.js";
+import { cleanPlaintext } from "../lib/pipeline/clean/cleanPlaintext.js";
+import { cleanSources, CLEANING_VERSION } from "../lib/pipeline/clean/cleanSources.js";
 
 let passed = 0;
 let failed = 0;
@@ -197,92 +195,6 @@ test("code block content is preserved inline after cleaning", () => {
   assert.ok(!result.clean_text.includes("```"), "backtick markers removed");
   assert.equal(result.extracted_code_blocks.length, 1, "code block extracted");
   assert.ok(result.extracted_iocs.cves.includes("CVE-2025-1111"), "CVE in extracted iocs");
-});
-
-// ── Curated scoring — not auto-ranked high ────────────────────────────────────
-
-console.log("\ncurated source scoring");
-
-test("curated tier credibility score equals medium (not boosted)", () => {
-  assert.equal(
-    CREDIBILITY_BY_TIER.curated,
-    CREDIBILITY_BY_TIER.medium,
-    "curated should score equal to medium"
-  );
-  assert.ok(
-    CREDIBILITY_BY_TIER.curated < CREDIBILITY_BY_TIER.high,
-    "curated should score below high"
-  );
-  assert.ok(
-    CREDIBILITY_BY_TIER.curated < CREDIBILITY_BY_TIER.primary,
-    "curated should score below primary"
-  );
-});
-
-test("curated weak source scores lower than primary source with strong signals", () => {
-  const curatedSource = {
-    id: "c1",
-    title: "Curated background reading",
-    url: "https://curated.example.com/article",
-    publisher: "Curated Publisher",
-    trust_tier: "curated",
-    tags: ["ai_policy"],
-    main_category: "ai_for_security",
-    ai_specificity_score: 20,
-    relevance_tier: "adjacent",
-    date_published: new Date().toISOString(),
-    full_text: "Background reading on AI governance frameworks.",
-    validity: { structural_validity_score: 55, publisher_trust_score: 6 },
-  };
-
-  const primarySource = {
-    id: "p1",
-    title: "CISA Advisory: Critical Prompt Injection Vulnerability",
-    url: "https://www.cisa.gov/advisory",
-    publisher: "CISA",
-    trust_tier: "primary",
-    tags: ["prompt_injection", "actively_exploited"],
-    main_category: "llm_threats",
-    ai_specificity_score: 90,
-    relevance_tier: "core",
-    date_published: new Date().toISOString(),
-    full_text: "x".repeat(300),
-    validity: { structural_validity_score: 75, publisher_trust_score: 10 },
-  };
-
-  const curatedScored = scoreSource(curatedSource);
-  const primaryScored = scoreSource(primarySource);
-
-  assert.ok(
-    primaryScored.priority_score > curatedScored.priority_score,
-    `Primary (${primaryScored.priority_score}) should outscore curated (${curatedScored.priority_score})`
-  );
-});
-
-test("trust tier does not affect source_credibility_score for non-primary tiers", () => {
-  // curated and medium should produce the same source_credibility_score
-  const base = {
-    id: "s1",
-    title: "Test Source",
-    url: "https://example.com/article",
-    publisher: "Example",
-    tags: [],
-    main_category: "llm_threats",
-    ai_specificity_score: 50,
-    relevance_tier: "core",
-    date_published: new Date().toISOString(),
-    full_text: "Some text about prompt injection vulnerabilities.",
-    validity: { structural_validity_score: 55, publisher_trust_score: 6 },
-  };
-
-  const curatedScored = scoreSource({ ...base, trust_tier: "curated" });
-  const mediumScored  = scoreSource({ ...base, trust_tier: "medium"  });
-
-  assert.equal(
-    curatedScored.source_credibility_score,
-    mediumScored.source_credibility_score,
-    "curated and medium produce identical source_credibility_score"
-  );
 });
 
 // ── Results ───────────────────────────────────────────────────────────────────

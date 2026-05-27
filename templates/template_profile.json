@@ -1,0 +1,85 @@
+{
+  "theme_name": "1_Office Theme",
+  "colors": {
+    "dk1": "000000",
+    "dk2": "000000",
+    "lt2": "DDDDDD",
+    "accent1": "3583C9",
+    "accent2": "9C62A7",
+    "accent3": "19BC9D",
+    "accent4": "FFAA22",
+    "accent5": "004987",
+    "accent6": "CC0033",
+    "hlink": "222222",
+    "folHlink": "0070C0"
+  },
+  "fonts": {
+    "major": "Calibri Light",
+    "minor": "Calibri",
+    "title_slide": "Segoe UI"
+  },
+  "layouts": [
+    {
+      "index": 1,
+      "name": "Cover Page"
+    },
+    {
+      "index": 2,
+      "name": "Title and Content"
+    },
+    {
+      "index": 3,
+      "name": "Two Content"
+    },
+    {
+      "index": 4,
+      "name": "Comparison"
+    },
+    {
+      "index": 5,
+      "name": "Divider"
+    },
+    {
+      "index": 6,
+      "name": "Blank"
+    },
+    {
+      "index": 7,
+      "name": "Section Header"
+    },
+    {
+      "index": 8,
+      "name": "3_Title Slide"
+    },
+    {
+      "index": 9,
+      "name": "4_Title Slide"
+    },
+    {
+      "index": 10,
+      "name": "Title and Content"
+    },
+    {
+      "index": 11,
+      "name": "Two Content"
+    },
+    {
+      "index": 12,
+      "name": "Comparison"
+    },
+    {
+      "index": 13,
+      "name": "Title Only"
+    },
+    {
+      "index": 14,
+      "name": "Section Header"
+    }
+  ],
+  "footer_marking": "RESTRICTED",
+  "citation_placement": "footer_left",
+  "restriction_marking": "RESTRICTED",
+  "restriction_placement": "footer_right",
+  "extracted_at": "2026-05-27T12:06:34.833Z",
+  "source_file": "/Users/zhaoxintong/PycharmProjects/thehorizon/templates/AI x Security (for AISP projection) (1).pptx"
+}

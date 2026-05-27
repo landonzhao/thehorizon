@@ -4,8 +4,8 @@ import crypto from "crypto";
 import XLSX from "xlsx";
 import { supabase } from "../lib/storage/supabaseClient.js";
 import { uploadArchiveJson } from "../lib/storage/blobArchiveStore.js";
-import { cleanPlaintext } from "../lib/cleaning/cleanPlaintext.js";
-import { checkSourceValidity } from "../lib/validation/sourceValidity.js";
+import { cleanPlaintext } from "../lib/pipeline/clean/cleanPlaintext.js";
+import { checkSourceValidity } from "../lib/pipeline/ingest/sourceValidity.js";
 
 const FILE_PATH = process.argv[2];
 

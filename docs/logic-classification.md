@@ -1,172 +1,109 @@
-# Classification Logic
+# Category Classification
 
-## What it does
+**File:** `lib/pipeline/classify/classifyCategory.js`
+**No LLM calls.** Fully deterministic.
 
-Classification is split into two distinct layers with different responsibilities:
-
-1. **Taxonomy (LLM)** — reads the source text and decides: what AI threat techniques does this cover, and how central is AI to this source? Outputs tags and an AI specificity score.
-2. **Classification (rule-based)** — reads the tags and deterministically derives the main category. No LLM involved.
-
-This separation means category assignment is testable, predictable, and not subject to LLM hallucination. It also gives cleaner signal: if the LLM cannot identify specific AI threat tags in a source, the source is correctly `uncategorised` regardless of surface-level AI mentions.
+Runs AFTER Layer 4 (understand) and BEFORE Layer 5a/5b branches.
 
 ---
 
-## LLM usage in this layer
+## Purpose
 
-e| Step | File | Purpose | API keys |
-|---|---|---|---|
-| Taxonomy (tags + AI score) | `lib/claims/enrichSource.js` | Identify AI threat techniques; score AI relevance | `OPENAI_API_KEY`, `OPENAI_API_KEY_2`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `GEMINI_API_KEY_2` |
-| Category derivation | `lib/classification/deriveCategory.js` | Tag counts → main_category | None — deterministic |
-
-**Provider rotation order** (7 slots, first available key is used):
-1. OpenAI `gpt-4o-mini` (`OPENAI_API_KEY`)
-2. OpenAI-2 `gpt-4o-mini` (`OPENAI_API_KEY_2`, secondary key)
-3. Groq `llama-3.3-70b-versatile` (`GROQ_API_KEY`, free tier)
-4. Gemini Flash `gemini-2.0-flash` (`GEMINI_API_KEY`, higher RPD quota)
-5. Gemini 2.5 `gemini-2.5-flash` (`GEMINI_API_KEY`)
-6. Gemini Flash-2 `gemini-2.0-flash` (`GEMINI_API_KEY_2`, secondary key)
-7. Gemini 2.5-2 `gemini-2.5-flash` (`GEMINI_API_KEY_2`, last resort)
-
-Quota-exhausted providers (HTTP 429 with `insufficient_quota` / `RESOURCE_EXHAUSTED`) are skipped. Rate-limited providers wait the `retry-after` duration (up to 30s) and retry the same provider up to 3 times. Non-quota errors (auth, network) bail immediately. The 2.5-second inter-call delay in `classifyStoredSources.js` keeps throughput within Groq's free-tier rate limit (30 RPM).
+Pick exactly one `main_category` for each source, using the `category_candidates` array produced by the Layer 4 LLM call. This is intentionally deterministic — the LLM already did the interpretive work; this step just picks the winner from its output.
 
 ---
 
-## Pipeline position
+## Position in Pipeline
 
 ```
-Ingestion → Cleaning → Dedup → Validation → Initial Tagging → Snapshot → [LLM Taxonomy] → [Tag→Category] → Score → Report
+Layer 4 (understand)
+  → source.understanding.category_candidates[]
+  → source.understanding.framework_tags[]
+        │
+        ▼
+  Category Classification   ← THIS STEP
+  → source.main_category
+  → source.classification_confidence
+        │
+        ▼
+Layer 5a (rawfact branch)   — groups sources by main_category for clustering
+Layer 5b (analytics branch) — aggregates counts per main_category
 ```
 
-Both layers run together in `lib/classification/classifyStoredSources.js`, which queries `sources` for unclassified sources and processes them sequentially.
+`main_category` is the primary grouping key for all downstream layers. Rawfact clustering (7.1D) is within-category. Analytics aggregation (7.2B) counts by category. Dossier builder (8A) selects evidence per category.
 
 ---
 
-## Layer 1: LLM taxonomy
+## Categories
 
-`lib/claims/enrichSource.js` sends each source to an LLM with a structured prompt. The LLM outputs:
+Defined in `lib/config/categories.js`:
 
-**Taxonomy fields (classification use):**
-- `classification.tags` — list of tags from the allowed vocabulary
-- `classification.ai_specificity_score` — integer 0–100
-- `classification.ai_specificity_reason` — one sentence justifying the score
-
-**The LLM does NOT assign `main_category`.** Category is derived from tags in Layer 2.
-
-**Enrichment fields (analysis and report use):**
-- `short_summary`, `analyst_brief`, `intelligence`, `claims`
-
-### AI specificity score
-
-The LLM scores how central AI threats are to the source:
-
-| Range | Interpretation |
-|---|---|
-| 0–10 | Purely generic cybersecurity — no AI involvement |
-| 11–19 | AI mentioned incidentally; core topic is traditional cyber |
-| 20–39 | AI is a contributing factor but not the primary subject |
-| 40–70 | AI is a primary factor (AI tool used, AI system targeted) |
-| 71–100 | AI or ML is the core subject (LLM threats, agentic risks, deepfakes) |
-
-Sources scoring < 10 are deleted. Defensive AI tools (SOC automation, AI scanners) score ≤ 20.
-
-### Tag selection
-
-The prompt instructs the LLM:
-- Select tags ONLY from `ALLOWED_TAGS` (the full list is in the prompt)
-- Tags must reflect techniques actually present in the source, not the publisher domain
-- Assign 0 tags if the source only mentions AI in passing
-
-This is the relevance gate: a source about a generic CVE that happens to mention "AI-powered tools" gets 0 threat tags and scores ≤ 10, landing in `uncategorised` and eventually being purged.
+| Category | Description |
+|----------|-------------|
+| `traditional_ai_threats` | Attacks on ML models: poisoning, extraction, evasion, backdoors |
+| `llm_threats` | LLM-specific attacks: prompt injection, jailbreaks, guardrail bypass |
+| `agentic_ai_threats` | Agent and tool attacks: MCP abuse, tool hijacking, excessive agency |
+| `ai_enabled_threats` | AI as weapon: deepfakes, AI phishing, AI malware |
+| `unclear_or_adjacent` | Fallback — does not proceed to analysis layer |
 
 ---
 
-## Layer 2: tag-to-category derivation
+## Decision Logic
 
-`lib/classification/deriveCategory.js` reads the assigned tags and returns a `main_category` deterministically.
+Priority order (highest to lowest):
 
-**Algorithm:**
-1. Count threat tags (non-context tags) per category using the `TAG_DEFINITIONS` mapping
-2. Pick the category with the highest count
-3. If tied: find the highest-severity tag (by position in `HIGH_SEVERITY_TAGS` then `ELEVATED_SEVERITY_TAGS`) among the tied categories — that tag's category wins
-4. If no threat tags at all (only context tags or empty): return `uncategorised`
-
-**Category confidence** is computed as:
+**1. `category_candidates` from LLM (Layer 4)**
 
 ```
-confidence = min(100, round(40 + dominance × 40 + min(bestCount, 5) × 4))
+category_candidates: [
+  { category: "llm_threats", confidence: "high", supporting_tags: [...] },
+  { category: "agentic_ai_threats", confidence: "medium", ... }
+]
 ```
 
-Where `dominance` = (winning category tag count) / (total threat tag count) and `bestCount` = the winning category's tag count. A single tag at 100% dominance yields ~84; five or more aligned tags at 100% dominance reaches 100. Split signals (e.g., 50% dominance) produce lower scores. Confidence is stored in `category_confidence` and surfaced in the dashboard as a quality indicator.
+Sort by: confidence tier (high > medium > low), then count of `supporting_tags`. Pick the first after sorting.
 
-**Tie-break fallback**: if no severity tag from the tied categories appears in `SEVERITY_PRIORITY`, the first tied category in the `MAIN_CATEGORIES` array order wins (`traditional_ai_threats` → `llm_threats` → `agentic_ai_threats` → `ai_enabled_threats`).
+**2. `framework_tags` fallback (if candidates empty or all low-confidence)**
 
-**Examples:**
+Count how many framework_tags have a `category_candidate` field matching a known category. Sort by count, then highest tag confidence. If the framework-tag pick has higher confidence than the candidates pick, use it.
 
-| Tags | Category | Why |
-|---|---|---|
-| `prompt_injection, jailbreak, rag_attack` | `llm_threats` (100%) | All tags map to llm_threats |
-| `mcp_exploitation, agent_hijacking, tool_abuse` | `agentic_ai_threats` (100%) | All tags map to agentic |
-| `jailbreak, mcp_exploitation` | `agentic_ai_threats` (68%) | Tie; mcp_exploitation is in HIGH_SEVERITY above jailbreak |
-| `prompt_injection, agent_memory_attack` | `llm_threats` (68%) | Tie; prompt_injection is in HIGH_SEVERITY above agent_memory_attack |
-| `cve, actively_exploited, nation_state` | `uncategorised` | All are context tags — no threat category signal |
+**3. Preserve existing `main_category` (idempotency guard)**
+
+If a source already has a valid `main_category` from a prior LLM-enriched run, and the current run used the deterministic fallback (no LLM, `understanding.llm_used=false`), keep the existing value rather than downgrading to `unclear_or_adjacent`.
+
+**4. Fallback**
+
+`unclear_or_adjacent` — source is not included in the analysis layer dossiers.
 
 ---
 
-## Relevance tier
+## Idempotency
 
-Derived from `ai_specificity_score` after LLM classification:
-
-| Tier | Condition | Meaning |
-|---|---|---|
-| `core` | Score ≥ 40 | AI is a primary factor — appears in reports and dashboard |
-| `adjacent` | 20 ≤ score < 40 | AI is relevant but not primary — archive only |
-| `context` | 10 ≤ score < 20 | AI mentioned incidentally — archive only |
-| (deleted) | Score < 10 | No AI signal — deleted from the database |
-
-Curated sources are never deleted and default to `core` if not previously tiered.
+Sources already stamped with `CLASSIFY_VERSION = "classify-v6.0"` are returned unchanged. This prevents re-classification of sources that were previously classified with full LLM context.
 
 ---
 
-## Purge pre-filter
+## Output Fields
 
-Before LLM enrichment runs, `lib/classification/purgeIrrelevantSources.js` removes clear off-topic sources using a broad AI keyword list. This avoids spending LLM tokens on sources that have no AI content at all.
-
-- **Pass 1**: Already-classified sources with `ai_specificity_score < 10` → delete
-- **Pass 2**: Unclassified sources with zero AI keyword matches → delete; any match passes to LLM
-
----
-
-## Classification version
-
-Every classified source is stamped with `tag_version = "classify-v5.0"` and `claim_extraction_status = "success"`. The `tag_version` field is the canonical "classified" marker.
-
-When `onlyUnclassified = true` (the default), `classifyStoredSources()` queries `WHERE tag_version IS NULL`.
+| Field | Type | Description |
+|-------|------|-------------|
+| `main_category` | string | One of the 5 categories above |
+| `classification_confidence` | high\|medium\|low\|none | Confidence of the assignment |
+| `classify_version` | string | Idempotency stamp |
 
 ---
 
-## Running classification
+## Batch Processing
 
-**Via API** (Vercel, timeouts apply):
+`classifySources(sources)` runs `classifySource()` on every source synchronously (no async, no LLM). Returns:
+
+```js
+{
+  sources: object[],
+  counts: {
+    total, already_done, newly_done,
+    high_conf, medium_conf, unclear,
+    distribution: { [category]: count },
+  }
+}
 ```
-POST /api/classify-sources?limit=100
-POST /api/classify-sources?limit=100&test_set=true
-```
-
-**Via script** (no timeout, preferred for large batches):
-```
-node scripts/enrichSources.js [limit] [delay_ms]
-node scripts/enrichSources.js 50 500         # OpenAI speed
-node scripts/enrichSources.js 50 7000        # Gemini free tier
-node scripts/enrichSources.js --test-set
-```
-
----
-
-## What was removed in v5.0
-
-- **Rule-based classifier** — deprecated stub; no longer called
-- **Phrase rules** — empty export; all phrase matching removed
-- **`ai_weight`** — removed from tag definitions; the LLM assigns `ai_specificity_score` directly
-- **`main_category` from LLM prompt** — category is now derived from tags, not from the LLM
-- **`ai_for_security` category** — removed; defensive AI is not threat intelligence
-- **Geographical tags** (`singapore_relevance`, `asean_relevance`) — removed from tag vocabulary

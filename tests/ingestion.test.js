@@ -4,11 +4,11 @@
  */
 
 import assert from "node:assert/strict";
-import { normalizeSource } from "../lib/sources/normalizeSource.js";
+import { normalizeSource } from "../lib/pipeline/ingest/normalizeSource.js";
 import { dedupeSources } from "../lib/utils/dedupe.js";
-import { filterAcceptableSources } from "../lib/sources/filterAcceptableSources.js";
-import { computeEligibilityFlags } from "../lib/sources/eligibilityFlags.js";
-import { isSafeUrl } from "../lib/validation/urlSafety.js";
+import { filterAcceptableSources } from "../lib/pipeline/ingest/filterAcceptableSources.js";
+import { computeEligibilityFlags } from "../lib/pipeline/ingest/eligibilityFlags.js";
+import { isSafeUrl } from "../lib/pipeline/classify/urlSafety.js";
 
 let passed = 0;
 let failed = 0;

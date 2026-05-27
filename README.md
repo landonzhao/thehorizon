@@ -90,7 +90,7 @@ Strategic synthesis:
 /tests        — cleaning.test.js, scoring.test.js, ingestion.test.js, events.test.js
 /docs
   /migrations — SQL migration files (run in order)
-  logic-*.md  — per-layer logic documentation
+  NN-*.md     — per-layer logic documentation (01-ingestion through 09-intelligence)
 ```
 
 ---
@@ -165,16 +165,18 @@ node tests/events.test.js      # intelligence layer: events → trends → repor
 
 | File | Covers |
 |------|--------|
-| `docs/logic-intelligence.md` | Intelligence layer architecture — the full events→trends→shifts→products pipeline |
+| `docs/architecture.md` | Full pipeline plan (stages 1–16) + logic layer index |
 | `docs/pipeline.md` | Ingestion pipeline detail (stages 1–10) |
-| `docs/architecture.md` | Extended pipeline plan (stages 11–16, analytics, full report) |
 | `docs/api.md` | All API endpoint documentation |
-| `docs/logic-cleaning.md` | Non-destructive cleaning architecture |
-| `docs/logic-archiving.md` | Immutable archive design, source_snapshots |
-| `docs/logic-trust.md` | Trust tiers, curated sources, credibility scoring |
-| `docs/logic-classification.md` | Tag taxonomy, category derivation |
-| `docs/logic-scoring.md` | Source scoring components |
-| `docs/logic-taxonomy.md` | Allowed tags and threat categories |
+| `docs/01-ingestion.md` | Connectors, normalisation, deduplication, eligibility flags |
+| `docs/02-cleaning.md` | Non-destructive cleaning architecture |
+| `docs/03-validation.md` | Source type filter, validity scoring, URL safety |
+| `docs/04-trust.md` | Trust tiers, curated sources, credibility scoring |
+| `docs/05-archiving.md` | Immutable archive design, source_snapshots |
+| `docs/06-taxonomy.md` | LLM tag assignment, AI specificity score, tag vocabulary |
+| `docs/07-classification.md` | Tag→category derivation, relevance tier, purge *(stub)* |
+| `docs/08-scoring.md` | Priority score, report score, v6 LLM extraction *(stub)* |
+| `docs/09-intelligence.md` | Events, trends, strategic synthesis, horizon scan *(stub)* |
 
 ---
 

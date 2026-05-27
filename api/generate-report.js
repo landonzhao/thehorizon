@@ -1,66 +1,63 @@
-import { generateReport, getExpectedReportId } from "../lib/reports/generateReport.js";
-import { saveReport, loadReport, listReports } from "../lib/reports/archiveReport.js";
+/**
+ * GET /api/generate-report
+ *
+ * Returns the latest generated deck from the `decks` table.
+ * Pass ?deck_id=deck-2026-05-26 to fetch a specific deck.
+ * Pass ?list=1 to get a list of recent deck runs (metadata only).
+ *
+ * Full deck JSON (synthesis + slides + QA) lives in Vercel Blob;
+ * `blob_path` in the response is the URL to that payload.
+ *
+ * Deck generation is NOT triggered here — run the deck locally:
+ *   node scripts/runHorizonScanMVP.js [options]
+ *
+ * Authorization: Bearer CRON_SECRET header (or x-vercel-cron: 1).
+ */
 
-function isAdmin(req) {
+import { loadLatestDeck, listDecks, getDeck } from "../lib/storage/deckStore.js";
+
+function isAuthorized(req) {
   const secret = process.env.CRON_SECRET;
-  const auth   = req.headers.authorization;
   if (!secret) return true;
-  return auth === `Bearer ${secret}` || req.headers["x-vercel-cron"] === "1";
+  return (
+    req.headers.authorization === `Bearer ${secret}` ||
+    req.headers["x-vercel-cron"] === "1"
+  );
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Cache-Control", "no-store");
+  if (!isAuthorized(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
   try {
-    const { period = "weekly", week, list, refresh, tiers, offset } = req.query;
+    const { list, deck_id } = req.query;
 
-    // ── List archived reports ─────────────────────────────────────────────
     if (list === "1") {
-      const reports = await listReports(["weekly", "monthly", "quarterly"].includes(period) ? period : null, 24);
-      return res.status(200).json({ reports });
+      const decks = await listDecks(20);
+      return res.status(200).json({ decks });
     }
 
-    // ── Fetch a specific archived report by report_id or week_key ─────────
-    if (week) {
-      const reportId = week.startsWith("report-") ? week : `report-${period}-${week}`;
-      const cached = await loadReport(reportId);
-      if (!cached) return res.status(404).json({ error: `Report not found: ${reportId}` });
-      return res.status(200).json(cached);
+    const deck = deck_id
+      ? await getDeck(deck_id)
+      : await loadLatestDeck();
+
+    if (!deck) {
+      return res.status(404).json({
+        error: "No deck found",
+        hint: "Run: node scripts/runHorizonScanMVP.js to generate one",
+      });
     }
 
-    // ── Validate period ───────────────────────────────────────────────────
-    if (!["weekly", "monthly", "quarterly"].includes(period)) {
-      return res.status(400).json({ error: "period must be weekly, monthly, or quarterly" });
-    }
-
-    const weekOffset   = parseInt(offset || "0", 10) || 0;
-    const includeTiers = tiers ? tiers.split(",") : ["core", "adjacent"];
-
-    // ── Force-refresh requires admin ──────────────────────────────────────
-    if (refresh === "1" && !isAdmin(req)) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    // ── Cache-first: serve from archive if available ──────────────────────
-    if (refresh !== "1") {
-      const expectedId = getExpectedReportId(period, weekOffset);
-      const cached = await loadReport(expectedId);
-      if (cached) return res.status(200).json(cached);
-    }
-
-    // ── Generate fresh report ─────────────────────────────────────────────
-    const report = await generateReport({ period, weekOffset, includeTiers });
-
-    try {
-      await saveReport(report);
-    } catch (archiveErr) {
-      console.warn("Report archive failed:", archiveErr.message);
-    }
-
-    return res.status(200).json(report);
-
+    return res.status(200).json(deck);
   } catch (error) {
-    console.error("generate-report error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: error.message,
+      stack: error.stack,
+    });
   }
 }

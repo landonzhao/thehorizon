@@ -1,4 +1,4 @@
-import { collectRawSources } from "../lib/sources/collectRawSources.js";
+import { collectRawSources } from "../lib/pipeline/ingest/collectRawSources.js";
 import { saveSnapshotToDatabase } from "../lib/storage/snapshotDatabase.js";
 import {
   startIngestionRun,

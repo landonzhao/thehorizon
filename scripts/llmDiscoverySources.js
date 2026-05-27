@@ -13,12 +13,12 @@
  */
 
 import "dotenv/config";
-import { fetchLlmDiscoverySources } from "../lib/sources/connectors/llmDiscoveryConnector.js";
-import { cleanSources } from "../lib/cleaning/cleanSources.js";
+import { fetchLlmDiscoverySources } from "../lib/pipeline/ingest/connectors/llmDiscoveryConnector.js";
+import { cleanSources } from "../lib/pipeline/clean/cleanSources.js";
 import { dedupeSources } from "../lib/utils/dedupe.js";
-import { filterAcceptableSources } from "../lib/sources/filterAcceptableSources.js";
-import { attachValidityToSources } from "../lib/validation/sourceValidity.js";
-import { attachInitialTags } from "../lib/sources/tagSource.js";
+import { filterAcceptableSources } from "../lib/pipeline/ingest/filterAcceptableSources.js";
+import { attachValidityToSources } from "../lib/pipeline/ingest/sourceValidity.js";
+import { attachInitialTags } from "../lib/pipeline/ingest/tagSource.js";
 import { saveSnapshotToDatabase } from "../lib/storage/snapshotDatabase.js";
 
 const now = new Date();

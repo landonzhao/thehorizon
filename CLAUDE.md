@@ -1,6 +1,6 @@
 # The Horizon — Project Context
 
-The Horizon is an AI threat intelligence and horizon scanning platform. It ingests sources from RSS feeds, academic databases, and threat intelligence APIs, classifies and scores them for relevance to the AI threat landscape, and generates structured reports for analysts.
+The Horizon is an AI threat intelligence and horizon scanning platform. It ingests sources from RSS feeds, academic databases, and threat intelligence APIs, classifies and scores them for relevance to the AI threat landscape, and generates structured slide decks for analysts.
 
 The intended audience is cybersecurity professionals, policy analysts, and decision-makers tracking AI-enabled threats, LLM vulnerabilities, agentic AI risks, and adversarial ML.
 
@@ -30,17 +30,24 @@ GEMINI_API_KEY — fallback LLM (gemini-2.5-flash); free tier is 20 req/day
 
 /api — Vercel serverless function handlers (one file = one endpoint)
 /lib — all business logic, imported by API handlers and scripts
-  /lib/sources — ingestion: connectors, registry, normalization, filtering
-  /lib/cleaning — text cleaning utilities
-  /lib/classification — tagging, categorization, AI specificity scoring
-  /lib/claims — LLM enrichment: enrichSource.js (OpenAI primary / Gemini fallback), validateClaims.js, processSourceClaims.js
-  /lib/scoring — priority and report scoring
-  /lib/reports — report generation logic
-  /lib/storage — Supabase client, snapshot persistence, Vercel Blob
-  /lib/archive — local JSON archive writing (dev only, gracefully skipped on Vercel)
-  /lib/time — reporting window calculations (SGT-anchored)
-  /lib/utils — deduplication
-  /lib/validation — source validity checks, URL safety
+  /lib/pipeline — the 9-layer pipeline, one subdirectory per layer group:
+    /lib/pipeline/ingest    — Layer 1: source collection, normalization, filtering, connectors
+    /lib/pipeline/clean     — Layer 2: text cleaning, structured content extraction
+    /lib/pipeline/classify  — Layer 3: source typing, relevance scoring, validity gate
+      /lib/pipeline/classify/layer3 — sublayers 3.1–3.5 (validity, relevance, typing, trust, gate)
+    /lib/pipeline/understand — Layer 4: LLM source understanding (stub)
+    /lib/pipeline/feed       — Layer 5a: feed evidence branch (stub)
+    /lib/pipeline/analytics  — Layer 5b: analytics branch (stub)
+    /lib/pipeline/synthesis  — Layer 6: strategic synthesis (stub)
+    /lib/pipeline/slides     — Layers 7–8: slide planning and generation (stub)
+    /lib/pipeline/qa         — Layer 9: QA and export (stub)
+  /lib/config   — controlled vocabularies: sourceTypes, categories, tags
+  /lib/llm      — LLM provider abstraction (callLLM.js, OpenAI/Gemini rotation)
+  /lib/prompts  — prompt templates used by pipeline layers
+  /lib/schemas  — source object shape definitions and validation helpers
+  /lib/storage  — Supabase client, snapshot persistence, Vercel Blob
+  /lib/time     — reporting window calculations (SGT-anchored)
+  /lib/utils    — deduplication
 /scripts — local Node.js scripts for operations that exceed Vercel's timeout
 /src — React frontend
   /src/constants.js — category labels, ordering, period day counts
@@ -50,13 +57,22 @@ GEMINI_API_KEY — fallback LLM (gemini-2.5-flash); free tier is 20 req/day
   /src/App.jsx — root component (routing only)
   /src/style.css — all styles
 /public — static assets
+/docs — architecture and API documentation
 
 
-## The Pipeline (High Level)
+## The Pipeline (9 Layers)
 
-Ingestion -> Cleaning -> Dedup -> Validation -> Tagging -> Snapshot -> Classify -> Score -> Report
+Layer 1 (ingest)     → collect raw sources from connectors
+Layer 2 (clean)      → normalize text, extract code blocks and IOCs
+Layer 3 (classify)   → validate, type, score relevance; gate sources for Layer 4
+Layer 4 (understand) → LLM deep understanding, framework mapping [stub]
+Layer 5a (feed)      → feed evidence extraction and scoring [stub]
+Layer 5b (analytics) → analytics aggregation and visualization data [stub]
+Layer 6 (synthesis)  → strategic viewpoint synthesis [stub]
+Layer 7–8 (slides)   → slide planning and content generation [stub]
+Layer 9 (qa)         → QA, citation validation, export [stub]
 
-Each stage is documented in detail in docs/pipeline.md.
+See docs/ai_cyber_horizon_scan_mvp_pipeline_architecture.md for the full spec.
 Each API endpoint is documented in docs/api.md.
 
 
@@ -75,10 +91,10 @@ Key columns on sources:
 - tags (text[]) — array of allowed tag strings
 - main_category — one of the five threat categories or "uncategorised"
 - ai_specificity_score (0-100) — how AI-specific the content is
-- relevance_tier — core (>=40), adjacent (20-39), context (10-19); off_topic deleted
-- priority_score — composite score for dashboard ranking
-- report_score — composite score for report inclusion ranking
-- intelligence (jsonb) — Gemini/OpenAI extracted fields: trend_signals, key_entities, threat_maturity, sector_impact, horizon_relevance, report_tier
+- relevance_tier — core/adjacent/peripheral/off_topic
+- layer3_status — pass/review/reject (set by Layer 3 final gate)
+- downstream_route — layer4/layer4_with_review/discard
+- intelligence (jsonb) — LLM-extracted fields: trend_signals, key_entities, threat_maturity, etc.
 - short_summary, analyst_brief — LLM-generated summaries
 - claim_extraction_status — null or "success"; indicates whether LLM enrichment ran
 
@@ -124,10 +140,6 @@ npx vercel dev — starts full local environment with API functions on :3000 (us
 
 Scripts that must be run locally (Vercel timeout is 10s for most operations):
 - node scripts/backfillSources.js [start] [end] [connectors] — historical ingestion
-- node scripts/enrichSources.js [limit] [delay_ms] — LLM enrichment of stored sources; requires OPENAI_API_KEY or GEMINI_API_KEY; default delay 7000ms (Gemini free tier), use 500ms or less with OpenAI
-- node scripts/importCuratedExcel.js — import curated sources from imports/ Excel file
-
-After backfill, run in order:
-1. POST /api/classify-sources?limit=1000 (repeat 2-3x until stable)
-2. POST /api/score-sources?limit=1000
-3. GET /api/generate-report?period=monthly
+- node scripts/importCuratedExcel.js <path-to-xlsx> — import curated sources from Excel
+- node scripts/debugLayer3.js [options] — inspect Layer 3 classification on live sources
+- node scripts/llmDiscoverySources.js — LLM-assisted source discovery
