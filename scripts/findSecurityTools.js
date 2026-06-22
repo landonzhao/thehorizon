@@ -49,33 +49,60 @@ const GH_HDR    = {
   ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
 };
 
-// Primary security-testing signal words — a candidate MUST match ≥1
-const SECURITY_MUST = [
-  "penetration test", "pentest", "red team", "vulnerability discover",
-  "exploit", "fuzzing", "fuzz", "jailbreak", "prompt injection",
-  "safety evaluation", "safety benchmark", "adversarial", "security scanner",
-  "guardrail", "attack simulation", "purple team", "bug bounty",
-  "security testing", "security audit", "offensive security", "ctf",
-  "capture the flag", "security benchmark", "security eval", "llm attack",
-  "ai attack", "agent security", "mcp security", "red-team",
-  "vulnerability scanner", "security agent", "code security", "static analysis",
+// ── Two-part gate: AGENTIC AI signal AND SECURITY TESTING scope ──────────────
+//
+// Gate 1 — tool must clearly involve LLMs, AI models, or autonomous AI agents.
+// This is what separates "PentestGPT" from "Metasploit". Traditional scripted
+// security tools (pwntools, routersploit, etc.) fail this gate → excluded.
+const AI_MUST_MATCH = [
+  "llm", "gpt", "claude", "gemini", "chatgpt", "openai", "anthropic",
+  "language model", "large language model", "foundation model",
+  "generative ai", "gen ai",
+  "ai agent", "ai-agent", "autonomous agent", "agentic",
+  "multi-agent", "multiagent",
+  "prompt injection", "jailbreak", "adversarial ml", "adversarial machine learning",
+  "model extraction", "data poisoning", "model inversion",
+  "garak", "pyrit", "promptfoo", "harmbench", "promptbench",
+  "llm-attacks", "agentdojo", "inspect-ai", "deepeval",
 ];
 
-// Hard exclusions — tools matching these are NOT security testing tools
-const GENERIC_EXCLUSIONS = [
-  "customer service", "e-commerce", "productivity assistant",
-  "scheduling", "crm", "content creation", "writing assistant",
-  "image generation", "text to image", "data visualization",
-  "recommendation engine",
+// Gate 2 — must also have a security-testing, red-team, or vulnerability purpose.
+// A general coding assistant fails this gate even if it uses an LLM.
+const SECURITY_MUST = [
+  "penetration test", "pentest", "red team", "red-team",
+  "vulnerability", "exploit", "attack", "offensive",
+  "fuzzing", "fuzz",
+  "jailbreak", "prompt injection",
+  "safety evaluation", "safety benchmark", "safety testing",
+  "adversarial", "security testing", "security scanner",
+  "guardrail", "guardrails",
+  "bug bounty", "ctf", "capture the flag",
+  "code security", "static analysis security", "sast",
+  "purple team", "attack simulation",
+  "malware", "phishing", "social engineering",
+  "threat model", "security audit",
+  "model robustness", "llm robustness",
+];
+
+// Hard exclusions — passes one gate but clearly not a security testing tool
+const HARD_EXCLUDE = [
+  "customer service bot", "productivity tool", "writing assistant",
+  "email assistant", "scheduling tool", "crm assistant",
+  "image generator", "text to image", "note taking",
 ];
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-function securityGate(text) {
-  const t = text.toLowerCase();
-  if (GENERIC_EXCLUSIONS.some(ex => t.includes(ex))) return false;
-  return SECURITY_MUST.some(kw => t.includes(kw));
+function passesGate(t) {
+  const text = `${t.name || ""} ${t.raw_description || ""} ${(t.topics || []).join(" ")}`.toLowerCase();
+  if (HARD_EXCLUDE.some(ex => text.includes(ex))) return false;
+  const hasAI  = AI_MUST_MATCH.some(kw => text.includes(kw));
+  const hasSec = SECURITY_MUST.some(kw => text.includes(kw));
+  return hasAI && hasSec;
 }
+
+// Keep old name as alias for callers that use it
+const securityGate = (text) => passesGate({ name: "", raw_description: text, topics: [] });
 
 // ── URL verifier ──────────────────────────────────────────────────────────────
 
@@ -106,21 +133,28 @@ async function fetchReadme(fullName) {
 
 // ── LLM description ──────────────────────────────────────────────────────────
 
-const DESC_SYSTEM = `You are writing factual descriptions of AI security testing tools for a research database.
+const DESC_SYSTEM = `You are cataloging agentic AI security testing tools for a standalone research database.
+This is NOT the horizon-scanning evidence pipeline. Do NOT classify into threat categories.
+
 RULES:
-1. Base your description ONLY on the text provided. Do not use general knowledge.
-2. Write 2-3 sentences: what the tool does, what attack/defense capability it provides, and who publishes it.
-3. If the text is insufficient, return null.
-4. Output JSON only: {"description": "...", "category": "...", "key_capabilities": []}
-CATEGORIES: pentesting_agent|vuln_discovery|red_teaming|prompt_injection_testing|safety_evaluation|agent_security_testing|mcp_security|code_security_agent|attack_simulation|observability_guardrail`;
+1. Base every field ONLY on the provided text. Do not use general knowledge.
+2. description: 2-3 factual sentences — what the tool does, what security capability it provides, who makes it.
+3. tool_type: pick the best fit from the allowed list.
+4. If text is insufficient for a field, use null.
+5. Output strict JSON only.
+
+ALLOWED tool_type values:
+  pentesting_agent | vuln_discovery | red_teaming | prompt_injection_testing |
+  safety_evaluation | agent_security | mcp_security | code_security |
+  attack_simulation | guardrail_testing | benchmark | framework | library | other`;
 
 async function getLlmDescription(tool, readme) {
   if (NO_LLM || !readme || readme.length < 100) return null;
   try {
     const { result } = await routedLLM(
       DESC_SYSTEM,
-      `Tool: ${tool.name}\nPublisher: ${tool.publisher || "unknown"}\nMetadata description: ${tool.raw_description || ""}\n\nREADME excerpt:\n${readme.slice(0, 4000)}`,
-      { task: "source_relevance", requires_json: true, logLabel: `sectool-${tool.name?.slice(0,20)}` }
+      `Tool: ${tool.name}\nPublisher: ${tool.publisher || "unknown"}\nMeta: ${tool.raw_description || "(none)"}\n\nREADME:\n${readme.slice(0, 4000)}\n\nReturn JSON:\n{"description":"...","tool_type":"...","primary_capability":"...","targets":[],"autonomous":true|false}`,
+      { task: "source_relevance", requires_json: true, logLabel: `sectool-${(tool.name || "").slice(0,20)}` }
     );
     return result;
   } catch { return null; }
@@ -128,27 +162,38 @@ async function getLlmDescription(tool, readme) {
 
 // ── Source 1: GitHub ──────────────────────────────────────────────────────────
 
+// GitHub topics that directly signal agentic AI security tools
 const GH_TOPICS = [
   "ai-pentesting", "llm-security", "red-teaming", "prompt-injection",
   "jailbreak", "ai-security", "llm-safety", "ai-vulnerability",
   "agent-security", "adversarial-ml", "ai-red-team", "llm-jailbreak",
-  "security-llm", "ai-fuzzing", "llm-evaluation",
+  "security-llm", "ai-fuzzing", "llm-evaluation", "ai-attack",
+  "llm-attack", "llm-red-teaming", "ai-safety-evaluation",
+  "prompt-hacking", "llm-testing", "agent-testing",
 ];
 
+// Keyword searches — ALL require an AI term AND a security term in the query
 const GH_KEYWORDS = [
-  '"autonomous pentesting" language:python stars:>3',
-  '"AI red teaming" stars:>3',
-  '"LLM vulnerability" language:python stars:>3',
-  '"prompt injection" "security" language:python stars:>5',
-  '"jailbreak" "framework" stars:>5',
-  '"agent security" "testing" stars:>3',
-  '"MCP security" stars:>3',
-  '"llm fuzzing" OR "ai fuzzing" stars:>3',
-  '"safety evaluation" "LLM" language:python stars:>5',
-  '"red team" "LLM" OR "language model" stars:>5',
-  '"exploit" "LLM" OR "language model" stars:>3',
-  '"vulnerability" "ai agent" stars:>3',
-  '"pentest" "AI" OR "LLM" language:python stars:>3',
+  '"LLM" "penetration testing" language:python stars:>3',
+  '"LLM" "red team" stars:>3',
+  '"AI agent" "vulnerability" language:python stars:>3',
+  '"prompt injection" "testing" "framework" stars:>5',
+  '"jailbreak" "benchmark" OR "framework" stars:>5',
+  '"AI agent" "security" "testing" stars:>3',
+  '"LLM" "fuzzing" stars:>3',
+  '"language model" "safety evaluation" language:python stars:>5',
+  '"gpt" "pentest" OR "penetration" stars:>3',
+  '"llm" "exploit" "attack" language:python stars:>3',
+  '"AI" "red teaming" "framework" stars:>3',
+  '"autonomous" "pentesting" OR "security testing" stars:>3',
+  '"agent" "security" "benchmark" language:python stars:>3',
+  '"LLM" "guardrail" "bypass" OR "evaluation" stars:>3',
+  '"MCP" "security" stars:>3',
+  '"agentic" "security" "testing" stars:>2',
+  '"garak" OR "pyrit" stars:>50',
+  '"HarmBench" OR "PromptBench" OR "JailbreakBench" stars:>20',
+  '"llm-attacks" OR "llm attacks" adversarial stars:>20',
+  '"AI" "red team" "automation" stars:>3',
 ];
 
 async function searchGithub(q, isTopic = false) {
