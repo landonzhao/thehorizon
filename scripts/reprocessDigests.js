@@ -23,6 +23,7 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { callLLM } from "../lib/llm/callLLM.js";
 import { detectDigest, fanOutDigest } from "../lib/pipeline/ingest/digestFanout.js";
+import { fetchPageText } from "../lib/pipeline/discovery/fetchCandidateText.js";
 
 const args = process.argv.slice(2);
 const LIVE = args.includes("--live");
@@ -32,8 +33,13 @@ const limit = args.includes("--limit") ? parseInt(args[args.indexOf("--limit") +
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const SELECT = "id,title,url,publisher,date_published,source_type,trust_tier,full_text,clean_text,summary,intelligence,is_digest";
 
-// callLLM(sys, usr, opts) is the production extractor; the module stays test-injectable.
-const llmFn = (sys, usr, opts) => callLLM(sys, usr, opts);
+// Production extraction opts: Haiku + cached prompt (report_extraction task),
+// full-document fetch for truncated reports, and a chunk cap for cost control.
+const fanOpts = {
+  llmFn: (sys, usr, opts) => callLLM(sys, usr, { ...opts, task: "report_extraction", json: true }),
+  fetchFullText: (url) => fetchPageText(url, { timeoutMs: 25000, maxChars: 150000 }),
+  maxChunks: 6,
+};
 
 async function candidateDigests() {
   if (idArg) {
@@ -58,7 +64,7 @@ async function main() {
   for (const s of digests) {
     let result;
     try {
-      result = await fanOutDigest(s, { llmFn, scoredAt });
+      result = await fanOutDigest(s, { ...fanOpts, scoredAt });
     } catch (e) {
       console.log(`  ✗ ${s.id.slice(0, 8)} ${s.title?.slice(0, 50)} — ${e.message.slice(0, 60)}`);
       continue;
